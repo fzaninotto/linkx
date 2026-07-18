@@ -22,25 +22,35 @@ function getAxisScore(
 ): number {
   const cellCount = BOARD_SIZE * BOARD_SIZE
   const distances = Array<number>(cellCount).fill(Number.POSITIVE_INFINITY)
-  const visited = Array<boolean>(cellCount).fill(false)
+  const settled = Array<boolean>(cellCount).fill(false)
+  let front: number[] = []
+  let back: number[] = []
+
+  const pushFront = (index: number) => front.push(index)
+  const pushBack = (index: number) => back.push(index)
+  const popFront = (): number | undefined => {
+    if (front.length === 0) {
+      const previousBack = back
+      back = []
+      front = previousBack.reverse()
+    }
+    return front.pop()
+  }
 
   for (let offset = 0; offset < BOARD_SIZE; offset += 1) {
     const start = axis === 'horizontal' ? { x: 0, y: offset } : { x: offset, y: 0 }
-    distances[pointIndex(start)] = getCellCost(board, player, start)
+    const index = pointIndex(start)
+    const cost = getCellCost(board, player, start)
+    distances[index] = cost
+    if (cost === 0) pushFront(index)
+    if (cost === 1) pushBack(index)
   }
 
-  while (true) {
-    let currentIndex = -1
-    let currentDistance = Number.POSITIVE_INFINITY
-
-    for (let index = 0; index < cellCount; index += 1) {
-      if (!visited[index] && distances[index] < currentDistance) {
-        currentIndex = index
-        currentDistance = distances[index]
-      }
-    }
-
-    if (currentIndex === -1) return Number.POSITIVE_INFINITY
+  while (front.length > 0 || back.length > 0) {
+    const currentIndex = popFront()
+    if (currentIndex === undefined || settled[currentIndex]) continue
+    settled[currentIndex] = true
+    const currentDistance = distances[currentIndex]
 
     const current = {
       x: currentIndex % BOARD_SIZE,
@@ -51,8 +61,6 @@ function getAxisScore(
         ? current.x === BOARD_SIZE - 1
         : current.y === BOARD_SIZE - 1
     if (hasReachedTarget) return currentDistance
-
-    visited[currentIndex] = true
 
     for (const offset of CONNECTION_NEIGHBORS) {
       const next = { x: current.x + offset.x, y: current.y + offset.y }
@@ -66,12 +74,17 @@ function getAxisScore(
       }
 
       const nextIndex = pointIndex(next)
-      const candidateDistance = currentDistance + getCellCost(board, player, next)
-      if (!visited[nextIndex] && candidateDistance < distances[nextIndex]) {
+      const cost = getCellCost(board, player, next)
+      const candidateDistance = currentDistance + cost
+      if (!settled[nextIndex] && candidateDistance < distances[nextIndex]) {
         distances[nextIndex] = candidateDistance
+        if (cost === 0) pushFront(nextIndex)
+        if (cost === 1) pushBack(nextIndex)
       }
     }
   }
+
+  return Number.POSITIVE_INFINITY
 }
 
 /**

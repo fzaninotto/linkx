@@ -8,6 +8,7 @@ import type {
   GameResult,
   GameState,
   Inventory,
+  PlayedCopies,
   PlayerId,
   Rotation,
 } from './types'
@@ -20,11 +21,25 @@ function makeInventories(): Record<PlayerId, Inventory> {
   return { blue: createInitialInventory(), white: createInitialInventory() }
 }
 
+function makePlayedCopies(): Record<PlayerId, PlayedCopies> {
+  const playerCopies = (): PlayedCopies => ({
+    mono: [false, false],
+    domino: [false, false],
+    bar3: [false, false],
+    smallL: [false, false],
+    s: [false, false],
+    t: [false, false],
+    largeL: [false, false],
+  })
+  return { blue: playerCopies(), white: playerCopies() }
+}
+
 export function createInitialState(): GameState {
   return {
     phase: 'setup',
     board: createEmptyBoard(),
     inventories: makeInventories(),
+    playedCopies: makePlayedCopies(),
     activePlayer: 'blue',
     selection: null,
     consecutivePasses: 0,
@@ -92,14 +107,15 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return started
     }
     case 'SELECT_SHAPE': {
+      const copy = action.copy ?? 0
       if (
         state.phase !== 'playing' ||
         action.player !== state.activePlayer ||
-        state.inventories[action.player][action.shapeId] === 0
+        state.inventories[action.player][action.shapeId] === 0 ||
+        state.playedCopies[action.player][action.shapeId][copy]
       ) {
         return state
       }
-      const copy = action.copy ?? 0
       if (
         state.selection?.shapeId === action.shapeId &&
         state.selection.copy === copy
@@ -158,12 +174,28 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state.inventories,
         [player]: { ...state.inventories[player], [shapeId]: remaining },
       }
+      const shapeCopies = [...state.playedCopies[player][shapeId]] as [
+        boolean,
+        boolean,
+      ]
+      shapeCopies[state.selection.copy] = true
+      const playedCopies = {
+        ...state.playedCopies,
+        [player]: {
+          ...state.playedCopies[player],
+          [shapeId]: shapeCopies,
+        },
+      }
+      const nextCopy = shapeCopies.findIndex((played) => !played) as 0 | 1 | -1
       const placed: GameState = {
         ...state,
         board,
         inventories,
+        playedCopies,
         selection:
-          remaining > 0 ? { ...state.selection, copy: 0 } : null,
+          remaining > 0 && nextCopy !== -1
+            ? { ...state.selection, copy: nextCopy }
+            : null,
         consecutivePasses: 0,
         lastEvent: { type: 'placed', player, shapeId },
         nextPieceId: state.nextPieceId + 1,

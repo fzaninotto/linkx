@@ -33,6 +33,7 @@ export type BoardCell = null | {
 
 export type Board = BoardCell[][]
 export type Inventory = Record<ShapeId, 0 | 1 | 2>
+export type PlayedCopies = Record<ShapeId, [boolean, boolean]>
 
 export type Selection = {
   shapeId: ShapeId
@@ -70,6 +71,7 @@ export type GameState = {
   phase: 'setup' | 'playing' | 'finished'
   board: Board
   inventories: Record<PlayerId, Inventory>
+  playedCopies: Record<PlayerId, PlayedCopies>
   activePlayer: PlayerId
   selection: Selection | null
   consecutivePasses: number
