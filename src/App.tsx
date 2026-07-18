@@ -205,61 +205,67 @@ function App() {
 
       <div className="game-layout">
         <section className="play-area">
-          <div className="play-banner">
-            {state.phase === 'finished' && state.result ? (
-              <GameOverPanel result={state.result} onReset={() => dispatch({ type: 'RESET_GAME' })} />
-            ) : (
-              <GameStatus
-                activePlayer={state.activePlayer}
-                event={state.lastEvent}
-                ghostMessage={ghostMessage}
-                thinking={aiTurn}
-              />
-            )}
-          </div>
+          {/* Bandeau et aperçu de sélection sont empilés au bureau et côte à
+              côte en une colonne : ce conteneur laisse la mise en page choisir,
+              sans que la hauteur réservée à l'aperçu creuse un vide au-dessus du
+              plateau sur un écran de téléphone. */}
+          <div className="play-head">
+            <div className="play-banner">
+              {state.phase === 'finished' && state.result ? (
+                <GameOverPanel result={state.result} onReset={() => dispatch({ type: 'RESET_GAME' })} />
+              ) : (
+                <GameStatus
+                  activePlayer={state.activePlayer}
+                  event={state.lastEvent}
+                  ghostMessage={ghostMessage}
+                  thinking={aiTurn}
+                />
+              )}
+            </div>
 
-          <div className="selection-stage">
-            {state.phase === 'playing' && state.selection && (
-              <>
-                {/* Raccourci de proximité : la pièce elle-même tourne au clic
-                    et se retourne au clic droit, sans aller jusqu'aux boutons.
-                    Ceux-ci restent la commande découvrable, et cet aperçu reste
-                    masqué aux lecteurs d'écran pour ne pas les dupliquer. */}
-                <div
-                  className="selected-piece-preview"
-                  aria-hidden="true"
-                  onClick={() => dispatch({ type: 'ROTATE_SELECTION' })}
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    if (canFlip) dispatch({ type: 'FLIP_SELECTION' })
-                  }}
-                >
-                  <PieceShape
-                    orientation={orientation!}
-                    player={state.activePlayer}
-                  />
-                </div>
-                <div className="selection-controls">
-                  <button
-                    type="button"
-                    className="control-button"
-                    aria-label="Tourner la pièce"
+            <div className="selection-stage">
+              {state.phase === 'playing' && state.selection && (
+                <>
+                  {/* Raccourci de proximité : la pièce elle-même tourne au clic
+                      et se retourne au clic droit, sans aller jusqu'aux boutons.
+                      Ceux-ci restent la commande découvrable, et cet aperçu reste
+                      masqué aux lecteurs d'écran pour ne pas les dupliquer. */}
+                  <div
+                    className="selected-piece-preview"
+                    aria-hidden="true"
                     onClick={() => dispatch({ type: 'ROTATE_SELECTION' })}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      if (canFlip) dispatch({ type: 'FLIP_SELECTION' })
+                    }}
                   >
-                    <span aria-hidden="true">↻</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="control-button"
-                    aria-label="Retourner la pièce"
-                    disabled={!canFlip}
-                    onClick={() => dispatch({ type: 'FLIP_SELECTION' })}
-                  >
-                    <span aria-hidden="true">⇄</span>
-                  </button>
-                </div>
-              </>
-            )}
+                    <PieceShape
+                      orientation={orientation!}
+                      player={state.activePlayer}
+                    />
+                  </div>
+                  <div className="selection-controls">
+                    <button
+                      type="button"
+                      className="control-button"
+                      aria-label="Tourner la pièce"
+                      onClick={() => dispatch({ type: 'ROTATE_SELECTION' })}
+                    >
+                      <span aria-hidden="true">↻</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="control-button"
+                      aria-label="Retourner la pièce"
+                      disabled={!canFlip}
+                      onClick={() => dispatch({ type: 'FLIP_SELECTION' })}
+                    >
+                      <span aria-hidden="true">⇄</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {aiming ? (

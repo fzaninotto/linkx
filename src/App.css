@@ -246,7 +246,13 @@
 /* La bande de visée et le vide qui la remplace hors sélection dérivent d'une
    seule hauteur : le bord supérieur du plateau ne peut donc pas se déplacer
    entre les deux états, à aucune largeur. */
-.play-area { --drop-zone-height: 30px; display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 1.1rem 1.4rem 2rem; background: #f8f7f3; }
+/* `--board-inset` est la distance entre le bord du cadre et la première colonne
+   du damier : marge du cadre, bordure et marge intérieure du plateau. La bande
+   de visée s'en sert pour aligner ses neuf flèches sur les neuf colonnes. */
+.play-area { --drop-zone-height: 30px; --board-inset: 18px; display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 1.1rem 1.4rem 2rem; background: #f8f7f3; }
+/* Au bureau, l'en-tête empile simplement le bandeau puis l'aperçu : la
+   géométrie est celle des deux blocs pris séparément. */
+.play-head { display: flex; width: min(100%, 520px); flex: 0 0 auto; flex-direction: column; align-items: center; }
 .play-banner { display: flex; width: min(100%, 520px); height: 68px; flex: 0 0 68px; }
 .game-status { display: flex; width: 100%; height: 100%; align-items: center; gap: 1rem; padding: 0.45rem 1rem; background: #eef3fb; }
 .game-status--blue { justify-content: flex-start; }
@@ -433,6 +439,13 @@
   from { opacity: 0.2; transform: translateY(-8px); }
 }
 
+/* L'aperçu s'ouvre sous le plateau au premier appui sur une pièce. Le plateau ne
+   bouge pas ; seules les réserves glissent, et ce fondu court signale d'où vient
+   le déplacement. Neutralisé par `prefers-reduced-motion`. */
+@keyframes selection-opens {
+  from { opacity: 0; }
+}
+
 @media (max-width: 620px) {
   .topbar {
     padding:
@@ -441,30 +454,79 @@
   }
   .topbar-actions { gap: 0.25rem; }
   .topbar-actions .text-button { display: none; }
-  /* Une bande de visée au doigt : 44px de haut, et le vide qui la remplace suit
-     automatiquement. */
-  .play-area { --drop-zone-height: 44px; padding: 0.7rem 0.55rem 1.5rem; }
-  /* Le bandeau est plus haut qu'au bureau : sur une seule colonne le panneau de
-     fin dispose de bien moins de largeur, donc son titre et sa raison passent à
-     la ligne. Il conserve sa hauteur fixe, celle de l'état en cours de partie,
-     pour que le bord haut du plateau ne bouge pas à la victoire. */
-  .play-banner { height: 88px; flex-basis: 88px; }
-  .game-status { min-height: 54px; gap: 0.5rem; padding: 0.55rem 0.75rem; }
-  .game-status p { max-width: 55%; font-size: 0.68rem; }
-  /* L'aperçu central s'aligne sur la case jouée plutôt que sur les 46px du
-     bureau : sur un téléphone la case du plateau est plus petite, et la zone de
-     sélection cesse de manger la hauteur du plateau. Elle reste de hauteur fixe
-     à largeur donnée, donc le bord haut du plateau ne bouge toujours pas. */
-  .selection-stage {
-    --preview-cell: min(46px, (100vw - 46px) / 9);
+  /* Bande de visée au doigt, et cadre de plateau resserré : les flèches se
+     réalignent d'elles-mêmes sur les colonnes du damier. */
+  .play-area { --drop-zone-height: 44px; --board-inset: 14px; padding: 0.7rem 0.55rem 0.6rem; }
+  /* Le plateau passe en tête de la colonne et n'en bouge plus : l'en-tête, dont
+     le contenu apparaît et disparaît, est renvoyé sous lui. Ce sont les réserves
+     qui absorbent sa hauteur, jamais le bord haut du plateau. L'ordre du DOM
+     reste inchangé, donc « Tourner » et « Retourner » précèdent toujours les
+     flèches de colonne à la tabulation, ce qui est l'ordre du geste. */
+  .board-frame { order: 2; }
+  .drop-zones,
+  .drop-zones-spacer { order: 1; }
+  .play-head { order: 3; }
 
-    height: calc(var(--preview-cell) * 3 + 12px);
-    flex-basis: calc(var(--preview-cell) * 3 + 12px);
+  /* Plus de bandeau de tour : en une colonne, c'est la réserve du joueur actif
+     qui passe en premier, et ce déplacement dit déjà à qui de jouer. Le répéter
+     coûtait 88px de haut sur l'écran où la hauteur est la plus rare. Restent le
+     message d'erreur, l'aperçu et le panneau de fin — et surtout l'annonce
+     `aria-live`, qui ne coûte aucun pixel : la permutation est un signal muet,
+     elle ne peut pas être le seul. */
+  .play-head {
+    --head-height: 88px;
+
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  .turn-arrow { display: none; }
+  /* L'aperçu passe à gauche, sous le plateau : le bandeau ne porte plus qu'un
+     message occasionnel et, vide, il repousserait tout vers le bord droit. */
+  .selection-stage { order: 1; }
+  .play-banner { order: 2; width: auto; height: auto; min-width: 0; flex: 1 1 auto; }
+  /* Sans message, il ne reste que du texte en lecture d'écran, hors flux : la
+     hauteur tombe alors d'elle-même à zéro. */
+  .game-status { min-height: 0; gap: 0.5rem; padding: 0; background: transparent; }
+  .game-status p { max-width: none; padding: 0.4rem 0.2rem; font-size: 0.68rem; text-align: left; }
+  .game-over-panel { height: auto; min-height: 84px; }
+  /* Rien de sélectionné : l'aperçu ne prend aucune place. */
+  .selection-stage:empty { display: none; }
+  /* Trois cases de haut au maximum, donc la case de l'aperçu se déduit de la
+     hauteur réservée à la rangée. */
+  .selection-stage {
+    --preview-cell: calc((var(--head-height) - 4px) / 3);
+
+    position: static;
+    display: flex;
+    width: auto;
+    height: var(--head-height);
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    animation: selection-opens 160ms ease-out;
   }
   .selected-piece-preview { width: calc(var(--preview-cell) * 3); height: calc(var(--preview-cell) * 3); }
   .selected-piece-preview .piece-shape { --piece-cell: var(--preview-cell); }
-  .control-button { width: 44px; height: 44px; }
-  .drop-zones { padding-inline: 8px; }
+  .selection-controls { position: static; gap: 2px; }
+  .control-button { width: 44px; height: calc((var(--head-height) - 2px) / 2); }
+  /* La rangée de flèches ne réserve plus de hauteur : elle se pose sur le haut
+     du plateau, alignée sur ses colonnes par `--board-inset`. Le vide qu'elle
+     laissait hors sélection disparaît, et comme elle ne pousse plus rien, le
+     bord haut du plateau ne bouge ni à la sélection ni au dépôt.
+     Réservé au téléphone : au-delà, le pointeur sait survoler et cette bande est
+     le prolongement haut de la surface de visée, elle doit rester au-dessus du
+     plateau pour qu'on puisse l'approcher par le haut. */
+  .drop-zones {
+    position: relative;
+    z-index: 3;
+    margin-bottom: calc(-1 * (var(--drop-zone-height) + 6px));
+    gap: 0;
+    padding-inline: var(--board-inset);
+  }
+  .drop-zones-spacer { display: none; }
+
   .board-frame { padding: 8px; }
   .board { --board-padding: 3px; border-width: 3px; }
   /* Cases d'environ trente pixels : le voile brillant et le filet spéculaire

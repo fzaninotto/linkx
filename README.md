@@ -111,9 +111,18 @@ Les tests vivent à côté de leur module, en `*.test.ts` / `*.test.tsx`.
 `App.tsx` rend le plateau d'abord, puis les deux réserves **dans l'ordre du tour**, la réserve du joueur actif en tête. L'ordre du DOM est donc toujours l'ordre visuel, y compris pour un lecteur d'écran ou une tabulation.
 
 - Sur trois colonnes, cet ordre ne doit rien décider : `App.css` pose chaque réserve sur la colonne de sa couleur avec `grid-area`, la bleue à gauche comme l'annonce la flèche du bandeau. Ne pas revenir à un placement automatique, il suivrait le tour.
-- En une seule colonne, la permutation des deux réserves est le signal de tour principal. Elle n'est jamais le seul : le bandeau garde sa flèche et sa teinte, et sa région `aria-live` annonce le changement. Une permutation muette serait invisible pour un lecteur d'écran.
+- En une seule colonne, la permutation des deux réserves porte le tour à elle seule : le bandeau visuel y est supprimé, il répétait cette information au prix de 88px de haut. Le signal reste doublé pour qui ne le voit pas — la région `aria-live` du bandeau, elle, est conservée et continue d'annoncer le changement. Une permutation muette serait invisible pour un lecteur d'écran ; ne pas retirer cette région en même temps que le bandeau.
+- Sur trois colonnes en revanche, les réserves sont ancrées par couleur et ne permutent jamais : le bandeau y est le seul indicateur de tour et doit rester.
 - Les sélecteurs `.play-area + .piece-tray` et `.piece-tray + .piece-tray` désignent respectivement la réserve active et l'adverse. Ils tiennent de l'ordre du DOM, donc aucune classe d'état n'est à câbler côté React.
 - La réserve empilée est une grille de sept colonnes — un groupe de forme par colonne, les deux exemplaires empilés. `--piece-cell` s'y déduit de la largeur de colonne : la silhouette rétrécit, la cible tactile reste à 44px. Ne pas réintroduire de défilement horizontal dans la réserve.
+
+### Hauteur au-dessus du plateau, sur téléphone
+
+Le plateau est l'élément principal : sur téléphone il commence immédiatement sous l'en-tête et **son bord haut ne bouge jamais**, ni à la sélection, ni à la rotation, ni à la victoire. Deux blocs de hauteur variable le menaçaient et sont traités séparément :
+
+- `play-head` — le bandeau et l'aperçu de la pièce sélectionnée — est regroupé dans un conteneur et renvoyé **sous** le plateau par `order`. Il peut donc s'ouvrir et se refermer librement : ce sont les réserves qui absorbent sa hauteur. L'ordre du DOM est inchangé, si bien que `Tourner`/`Retourner` précèdent toujours les flèches de colonne à la tabulation.
+- La rangée de flèches de dépôt ne réserve plus de hauteur : elle se **superpose** au haut du plateau, alignée sur ses colonnes par `--board-inset`, qui vaut la somme marge du cadre + bordure + marge intérieure. Modifier l'un de ces trois padding sans mettre `--board-inset` à jour désaligne les flèches.
+- Cette superposition est réservée au téléphone. Au-delà, le pointeur sait survoler et cette bande est le prolongement haut de la surface de visée : elle doit rester au-dessus du plateau pour qu'on puisse l'approcher par le haut.
 
 ### Zone sûre iOS
 
