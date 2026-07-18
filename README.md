@@ -122,6 +122,20 @@ npm run lint
 npm run build
 ```
 
+## Intégration continue et déploiement
+
+`.github/workflows/ci.yml` tourne sur `push` vers `main`, sur `pull_request` vers `main` et manuellement (`workflow_dispatch`). Un `concurrency` par branche annule les runs obsolètes.
+
+- Job `quality` : Node 22, cache npm, `npm ci`, puis `npm run lint`, `npm test` et `npm run build`. Il téléverse `dist/` en artefact.
+- Job `deploy` : dépend de `quality` et ne s'exécute que sur un `push` vers `main`, jamais sur une PR. Il publie `dist/` sur la branche `gh-pages` via `peaceiris/actions-gh-pages@v4`.
+- Le workflow est en `contents: read` ; seul le job `deploy` élève ses droits à `contents: write`.
+
+Le site est servi par GitHub Pages sous un sous-chemin (`https://fzaninotto.github.io/linkx/`). Les liens vers les assets doivent donc rester **relatifs** :
+
+- `vite.config.ts` fixe `base: './'`. Ne pas repasser à une base absolue : les balises générées deviendraient `/assets/...` et la page serait blanche sous le sous-chemin.
+- Toute référence à un fichier de `public/` s'écrit en relatif (`./favicon.svg`), jamais `/favicon.svg`.
+- `public/.nojekyll` empêche GitHub Pages de filtrer les fichiers commençant par un underscore.
+
 ## Discipline de modification
 
 - Préserver les changements existants de l'utilisateur et éviter les réécritures sans rapport avec la tâche.
