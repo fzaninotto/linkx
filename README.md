@@ -1,6 +1,6 @@
 # Linkx
 
-Une implémentation en SPA React du jeu de plateau Lynkx, jouable à deux sur le même écran ou contre l'ordinateur.
+Une implémentation en SPA React du jeu de plateau Linkx, jouable à deux sur le même écran ou contre l'ordinateur. L'application est installable et jouable hors ligne.
 
 Règle du jeu officielle (PDF) :
 
@@ -25,6 +25,7 @@ npm run dev
 | `npm run lint` | oxlint |
 | `npm run build` | `tsc -b` puis build de production |
 | `npm run preview` | sert le build de production |
+| `node scripts/generate-icons.mjs` | régénère les icônes PNG de `public/` |
 
 ## Source de vérité
 
@@ -74,6 +75,14 @@ src/
     pieceGeometry.ts    getCellsOutlinePath, contour de l'union des cases
     usePointerHasHover.ts  détection du survol réel du pointeur
   App.tsx               câblage du reducer, tour de l'ordinateur, raccourcis clavier
+  main.tsx              montage React et enregistrement du service worker
+public/                 copié tel quel à la racine du site publié
+  manifest.webmanifest  manifeste de l'application installable
+  sw.js                 service worker : hors-ligne et stratégies de cache
+  icon-192.png, icon-512.png, icon-maskable-512.png, apple-touch-icon.png
+  favicon.svg, icons.svg
+scripts/
+  generate-icons.mjs    régénère les PNG d'icônes, sans dépendance npm
 ```
 
 Les tests vivent à côté de leur module, en `*.test.ts` / `*.test.tsx`.
@@ -147,6 +156,21 @@ Le site est servi par GitHub Pages sous un sous-chemin (`https://fzaninotto.gith
 - `vite.config.ts` fixe `base: './'`. Ne pas repasser à une base absolue : les balises générées deviendraient `/assets/...` et la page serait blanche sous le sous-chemin.
 - Toute référence à un fichier de `public/` s'écrit en relatif (`./favicon.svg`), jamais `/favicon.svg`.
 - `public/.nojekyll` empêche GitHub Pages de filtrer les fichiers commençant par un underscore.
+
+## Application installable (PWA)
+
+Le jeu s'installe sur l'écran d'accueil et se relance hors ligne. Tout est écrit à la main : aucune dépendance PWA n'est nécessaire pour une application d'un seul bundle sans découpage de code.
+
+- `public/manifest.webmanifest` déclare le nom, les icônes, `display: standalone` et l'orientation. `start_url` et `scope` valent `./` : le manifeste se résout donc sous n'importe quel sous-chemin de publication. Ne pas y écrire de chemin absolu.
+- `index.html` porte le lien vers le manifeste, `theme-color`, et les balises `apple-touch-icon` et `apple-mobile-web-app-*` qu'iOS exige faute d'implémenter le manifeste.
+- `src/main.tsx` enregistre `./sw.js` seulement si `import.meta.env.PROD`, pour ne pas masquer le rechargement à chaud en développement. Le chemin relatif fixe aussi la portée du worker.
+- `public/sw.js` applique trois stratégies : **réseau d'abord** pour les documents, **cache d'abord** pour `assets/…` dont le nom est haché, **cache puis revalidation** pour le reste de l'origine. Un déploiement ne peut donc pas enfermer un joueur sur une version périmée. Ne pas passer le HTML en cache d'abord : il porte les noms hachés du build courant.
+- À l'installation, le worker relit le document pour y trouver les assets du build et les précharger : le hors-ligne fonctionne dès la fin de la première visite, sans liste de fichiers hachés codée en dur.
+- Changer les stratégies ou le contenu préchargé impose d'incrémenter `VERSION` dans `public/sw.js` : les anciens caches sont purgés à l'activation.
+
+Les icônes sont produites par `node scripts/generate-icons.mjs`, qui écrit des PNG valides à partir de `zlib` seul. Régénérer après toute retouche du motif ou de la palette, puis vérifier les dimensions (`file public/icon-192.png`).
+
+Vérification manuelle après `npm run build` : servir `dist/` depuis un sous-répertoire (`…/linkx/`) pour reproduire le sous-chemin, contrôler que le worker atteint `activated`, puis recharger serveur arrêté.
 
 ## Discipline de modification
 
