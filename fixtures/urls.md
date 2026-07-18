@@ -30,13 +30,13 @@ et déclenche immédiatement le panneau final et le surlignage du chemin gagnant
 La partie précédente après le coup gagnant : panneau de fin non modal au-dessus de
 la grille et chemin bleu vertical surligné, sans que la grille remonte.
 
-## Partie terminée, victoire blanche par connexion
+## Partie terminée, victoire blanche par connexion verticale
 
 <http://localhost:5173/?moves=4Tr21+4Lr34+3Ir12+3Ir12+4Lsr33+4Lr33+3Ir15+4Ss4+4Lsr26+4Ss8+4Tr16+3Lr17+27+3Ir16+12+2r13>
 
-Partie plus dense ouverte par les bleus : les blancs relient le bord gauche au bord
-droit en passant par le milieu du plateau. Utile pour vérifier la lisibilité du
-chemin surligné sur des pièces blanches.
+Partie plus dense ouverte par les bleus : les blancs relient le bord bas au bord
+haut, de la colonne 9 vers la colonne 3. Utile pour vérifier la lisibilité du
+chemin tracé sur des pièces blanches.
 
 ## Partie terminée par blocage, avec passe forcée
 
