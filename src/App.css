@@ -301,7 +301,18 @@
    ce qui prouve à l'œil que les pièces sont translucides. */
 .board-cell { position: relative; min-width: 0; border: 0.5px solid #b8bcbf; background: #eae8e1; }
 .board--aiming { cursor: pointer; }
-.board-piece-layer { position: absolute; z-index: 2; inset: var(--board-padding); width: auto; height: auto; overflow: visible; pointer-events: none; }
+/* La couche des pièces doit recouvrir exactement la boîte de contenu du plateau,
+   celle où la grille pose ses neuf colonnes — mais `inset` seul ne l'y amène pas.
+   Un `<svg>` est un élément remplacé : positionné en absolu avec `width: auto`,
+   la spec fait primer sa taille intrinsèque, puis ignore `right` et `bottom`
+   devenus surcontraints. Safari applique la règle et prend 100% du bloc
+   conteneur, soit la boîte de padding, là où Chrome et Firefox étirent entre les
+   deux bords. La couche sortait deux paddings trop large et l'écart avec les
+   cases croissait de zéro à gauche jusqu'à 8px sur la dernière colonne.
+   Ancrage par `top`/`left` et taille explicite : rien à arbitrer, même résultat
+   partout. Le pourcentage se résolvant sur la boîte de padding, en retirer les
+   deux paddings redonne la boîte de contenu. */
+.board-piece-layer { position: absolute; z-index: 2; top: var(--board-padding); left: var(--board-padding); width: calc(100% - 2 * var(--board-padding)); height: calc(100% - 2 * var(--board-padding)); overflow: visible; pointer-events: none; }
 /* Dalles de plexiglas : teinte translucide, tranche biseautée et ombre portée
    viennent du filtre partagé, la géométrie reste celle de `getCellsOutlinePath`. */
 .board-piece { fill: var(--blue); fill-opacity: var(--blue-fill-opacity); stroke: var(--blue-outline); stroke-width: var(--piece-outline); stroke-linejoin: miter; filter: url(#plexi-relief); animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1); }
