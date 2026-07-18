@@ -19,23 +19,21 @@ export function GameOverPanel({ result, onReset }: GameOverPanelProps) {
         : 'Plus aucun coup légal et les plus grandes zones sont à égalité.'
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section className="game-over-panel" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
-        <span className={`winner-medal winner-medal--${result.winner ?? 'draw'}`} aria-hidden="true">✦</span>
-        <p className="overline">Partie terminée</p>
+    <section className={`game-over-panel game-over-panel--${result.winner ?? 'draw'}`} aria-labelledby="game-over-title" aria-live="assertive">
+      <span className="winner-medal" aria-hidden="true">✦</span>
+      <div className="game-over-copy">
         <h2 id="game-over-title">{title}</h2>
         <p>{explanation}</p>
-        {result.largestZones && (
-          <div className="score-grid">
-            <span>Bleus <strong>{result.largestZones.blue}</strong></span>
-            <span>Blancs <strong>{result.largestZones.white}</strong></span>
-          </div>
-        )}
-        <button type="button" className="primary-button" onClick={onReset} autoFocus>
-          Nouvelle partie
-        </button>
-      </section>
-    </div>
+      </div>
+      {result.largestZones && (
+        <div className="score-grid" aria-label="Scores des plus grandes zones">
+          <span>Bleus <strong>{result.largestZones.blue}</strong></span>
+          <span>Blancs <strong>{result.largestZones.white}</strong></span>
+        </div>
+      )}
+      <button type="button" className="primary-button" onClick={onReset}>
+        Rejouer
+      </button>
+    </section>
   )
 }
-

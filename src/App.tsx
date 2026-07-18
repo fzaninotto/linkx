@@ -4,11 +4,11 @@ import { Board } from './components/Board'
 import { DropZone } from './components/DropZone'
 import { GameOverPanel } from './components/GameOverPanel'
 import { GameStatus } from './components/GameStatus'
-import { PieceShape } from './components/PieceShape'
 import { PieceTray } from './components/PieceTray'
 import { RulesPanel } from './components/RulesPanel'
 import { SetupPanel } from './components/SetupPanel'
 import { FLIPPABLE_SHAPES } from './game/pieces'
+import { getWinningPath } from './game/connectivity'
 import { calculateDrop } from './game/placement'
 import { createInitialState, gameReducer } from './game/reducer'
 import { getOrientation } from './game/transforms'
@@ -40,6 +40,14 @@ function App() {
         ? calculateDrop(state.board, orientation, hoveredColumn)
         : null,
     [hoveredColumn, orientation, state.board],
+  )
+
+  const winningPath = useMemo(
+    () =>
+      state.result?.reason === 'connection' && state.result.winner
+        ? getWinningPath(state.board, state.result.winner)
+        : [],
+    [state.board, state.result],
   )
 
   useEffect(() => {
@@ -84,7 +92,7 @@ function App() {
 
   const ghostMessage = ghost
     ? ghost.valid
-      ? `Pose possible en colonne ${hoveredColumn! + 1}. Cliquez pour jouer.`
+      ? null
       : DROP_MESSAGES[ghost.reason]
     : null
   const canFlip =
@@ -112,45 +120,59 @@ function App() {
         />
 
         <section className="play-area">
-          <GameStatus
-            activePlayer={state.activePlayer}
-            selection={state.selection}
-            event={state.lastEvent}
-            ghostMessage={ghostMessage}
-          />
+          {state.phase === 'finished' && state.result ? (
+            <GameOverPanel result={state.result} onReset={() => dispatch({ type: 'RESET_GAME' })} />
+          ) : (
+            <GameStatus
+              activePlayer={state.activePlayer}
+              event={state.lastEvent}
+              ghostMessage={ghostMessage}
+            />
+          )}
 
-          <div className="selection-controls">
-            {state.selection && orientation ? (
-              <>
-                <span className="selected-piece-card">
-                  <PieceShape orientation={orientation} player={state.activePlayer} compact />
-                </span>
-                <button type="button" className="control-button" onClick={() => dispatch({ type: 'ROTATE_SELECTION' })}>
-                  <span aria-hidden="true">↻</span> Tourner <kbd>R</kbd>
-                </button>
-                <button
-                  type="button"
-                  className="control-button"
-                  disabled={!canFlip}
-                  onClick={() => dispatch({ type: 'FLIP_SELECTION' })}
-                >
-                  <span aria-hidden="true">⇄</span> Retourner <kbd>F</kbd>
-                </button>
-              </>
-            ) : (
-              <span className="selection-placeholder">Sélectionnez une forme pour afficher les entrées</span>
-            )}
-          </div>
+          {state.phase === 'playing' && (
+            <>
+              <div className={`selection-controls${state.selection ? '' : ' is-empty'}`}>
+                {state.selection && (
+                  <>
+                    <button
+                      type="button"
+                      className="control-button"
+                      onClick={() => dispatch({ type: 'ROTATE_SELECTION' })}
+                    >
+                      <span aria-hidden="true">↻</span> Tourner <kbd>R</kbd>
+                    </button>
+                    <button
+                      type="button"
+                      className="control-button"
+                      disabled={!canFlip}
+                      onClick={() => dispatch({ type: 'FLIP_SELECTION' })}
+                    >
+                      <span aria-hidden="true">⇄</span> Retourner <kbd>F</kbd>
+                    </button>
+                  </>
+                )}
+              </div>
 
-          <DropZone
-            enabled={state.phase === 'playing' && Boolean(state.selection)}
-            hoveredColumn={hoveredColumn}
-            invalid={Boolean(ghost && !ghost.valid)}
-            onHover={setHoveredColumn}
-            onDrop={(column) => dispatch({ type: 'DROP_SELECTED_SHAPE', column })}
+              {state.selection ? (
+                <DropZone
+                  enabled
+                  hoveredColumn={hoveredColumn}
+                  invalid={Boolean(ghost && !ghost.valid)}
+                  onHover={setHoveredColumn}
+                  onDrop={(column) => dispatch({ type: 'DROP_SELECTED_SHAPE', column })}
+                />
+              ) : (
+                <div className="drop-zones-spacer" aria-hidden="true" />
+              )}
+            </>
+          )}
+          <Board
+            board={state.board}
+            ghost={state.phase === 'playing' ? ghost : null}
+            ghostPlayer={state.activePlayer}
+            winningPath={winningPath}
           />
-          <Board board={state.board} ghost={ghost} ghostPlayer={state.activePlayer} />
-          <p className="board-caption"><span aria-hidden="true">✦</span> Reliez gauche–droite ou haut–bas. Les diagonales comptent.</p>
         </section>
 
         <PieceTray
@@ -163,9 +185,6 @@ function App() {
       </div>
 
       {rulesOpen && <RulesPanel onClose={() => setRulesOpen(false)} />}
-      {state.phase === 'finished' && state.result && (
-        <GameOverPanel result={state.result} onReset={() => dispatch({ type: 'RESET_GAME' })} />
-      )}
     </main>
   )
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getComponents, getLargestZone, hasWinningConnection } from './connectivity'
+import {
+  getComponents,
+  getLargestZone,
+  getWinningPath,
+  hasWinningConnection,
+} from './connectivity'
 import { enumerateLegalMoves } from './legalMoves'
 import { BASE_SHAPES, createInitialInventory, matrixToPoints } from './pieces'
 import { calculateDrop, createEmptyBoard } from './placement'
@@ -200,6 +205,9 @@ describe('connexions', () => {
     occupy(diagonal, Array.from({ length: 9 }, (_, value) => ({ x: value, y: value })))
     expect(hasWinningConnection(diagonal, 'blue')).toBe(true)
     expect(getComponents(diagonal, 'blue')).toHaveLength(1)
+    expect(getWinningPath(diagonal, 'blue')).toEqual(
+      Array.from({ length: 9 }, (_, value) => ({ x: value, y: value })),
+    )
   })
 
   it('ne connecte pas deux zones séparées ou de couleurs adverses', () => {

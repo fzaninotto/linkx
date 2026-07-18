@@ -12,9 +12,9 @@ Il contient :
 - l'architecture recommandée ;
 - les algorithmes de pose, de passe et de victoire ;
 - le plan de tests et les critères d'acceptation ;
-- les quelques décisions encore à confirmer.
+- les décisions UX définitivement appliquées.
 
-Ce fichier est un plan. Au moment de sa création, aucun développement du jeu n'a encore été effectué.
+Ce fichier est la spécification de référence du jeu actuel. Un agent doit pouvoir repartir du starter décrit ci-dessous et recréer le même moteur, les mêmes interactions et la même présentation sans avoir besoin de l'historique de conversation. Les comportements formulés comme obligations dans ce document priment sur les anciennes recommandations.
 
 ## 2. État initial du dépôt
 
@@ -196,7 +196,7 @@ En cas de blocage total :
 2. faire la même chose pour les blancs ;
 3. le score le plus élevé gagne.
 
-La règle imprimée ne précise pas le cas d'une égalité parfaite. Recommandation actuelle : déclarer un match nul. Voir la section « Décisions à confirmer ».
+La règle imprimée ne précise pas le cas d'une égalité parfaite. Décision appliquée dans l'application : déclarer un match nul.
 
 ## 5. Expérience utilisateur demandée
 
@@ -213,16 +213,22 @@ Sur écran de bureau :
 - La réserve du joueur actif est mise en évidence.
 - La réserve adverse est visible mais non interactive.
 - Utiliser un fond neutre suffisamment contrasté pour que les pièces blanches restent lisibles.
+- Sur bureau, utiliser trois colonnes d'environ `330 px / zone centrale / 330 px`. La grille centrale est limitée à environ `520 px` afin que les pièces de réserve puissent être représentées presque à la même échelle que les pièces jouées.
 
-Sur petit écran, conserver la grille prioritaire et réorganiser les réserves au-dessus et au-dessous. La partie doit rester jouable en mode paysage sur tablette.
+Sur petit écran, conserver la grille prioritaire et réorganiser les réserves au-dessus et au-dessous. Les sept formes d'une réserve sont alors placées dans une rangée horizontale défilante, sans provoquer de débordement de page. La partie doit rester jouable en mode paysage sur tablette et sur mobile.
 
 ### 5.2 Affichage de l'inventaire
 
-Recommandation : afficher sept boutons de forme par joueur, chacun avec un badge `×2`, `×1` ou `×0`.
+Afficher sept boutons de forme par joueur, sans nom visible et sans badge numérique.
 
-- Le bouton devient indisponible à `×0`.
+- Chaque bouton affiche directement les exemplaires restants : deux silhouettes identiques au départ, une silhouette après la première utilisation, puis une ligne vide après la seconde.
+- Sur bureau, chaque forme occupe sa propre ligne. Sur tablette et mobile, ces lignes deviennent des cartes dans une rangée horizontale défilante.
+- Le bouton vide reste présent pour conserver la position des sept formes, mais devient indisponible et très atténué.
 - Une pose décrémente exactement une occurrence.
 - Le joueur ne choisit pas entre deux exemplaires identiques : il choisit une forme dont le compteur est positif.
+- Les noms de forme et les quantités restent disponibles uniquement dans le nom accessible du bouton (`aria-label`) pour les lecteurs d'écran et les tests.
+- Les cellules graphiques des pièces de réserve utilisent une taille d'environ `46 px`. La grille centrale est dimensionnée pour que la partie visible d'une case jouée soit de taille équivalente.
+- Choisir pour les aperçus non sélectionnés une orientation compacte et reconnaissable ; le `S` est affiché horizontalement pour limiter la hauteur de la réserve.
 
 ### 5.3 Sélection, rotation et miroir
 
@@ -233,13 +239,16 @@ Interaction demandée :
 - bouton visible « Retourner » pour `grand L` et `S` ;
 - raccourci clavier `F` pour retourner ;
 - raccourci clavier `R` ou flèches pour tourner, en complément du clic ;
-- indiquer clairement l'orientation sélectionnée.
+- montrer l'orientation directement sur les silhouettes de la réserve sélectionnée.
 
 Le bouton de retournement peut être masqué ou désactivé pour les formes dont le miroir est redondant.
 
+Ne pas afficher de texte du type « nom de la pièce · 90° » ni un second aperçu de la pièce dans la zone centrale : la réserve sélectionnée est la source visuelle de vérité.
+
 ### 5.4 Ghost et dépôt
 
-- Afficher neuf zones d'entrée cliquables au-dessus de la grille.
+- Afficher neuf zones d'entrée cliquables au-dessus de la grille uniquement lorsqu'une pièce est sélectionnée.
+- Chaque zone affiche seulement une flèche. Ne pas afficher les numéros de colonnes ; conserver « colonne N » dans l'`aria-label` du bouton.
 - Le survol d'une entrée calcule immédiatement l'atterrissage de la pièce.
 - L'aperçu ghost occupe exactement les cases finales calculées par le moteur.
 - Ghost valide : couleur du joueur avec transparence et contour positif.
@@ -255,13 +264,26 @@ Convention recommandée : la colonne survolée représente la colonne de la case
 Prévoir :
 
 - `Au tour des bleus/blancs` ;
-- nom et aperçu de la pièce sélectionnée ;
 - message court lors d'une pose refusée ;
 - message lors d'une passe forcée ;
-- modal ou panneau de victoire indiquant la raison : connexion, blocage ou match nul ;
+- panneau compact de fin de partie indiquant la raison : connexion, blocage ou match nul ;
 - scores des plus grandes zones en cas de blocage ;
 - bouton `Nouvelle partie` ;
 - aide/règles résumées sans quitter la partie.
+
+Le panneau final ne doit jamais être modal et ne doit jamais recouvrir la grille. Il remplace la barre d'état au-dessus du plateau afin que le dernier coup et le chemin gagnant restent immédiatement visibles. Il contient un bouton compact `Rejouer`.
+
+Ne pas afficher de texte d'instruction permanent lorsque le visuel suffit. Les informations nécessaires à l'accessibilité et aux tests doivent être placées dans des attributs `aria-*` ou `data-testid`, pas ajoutées comme libellés visibles.
+
+### 5.6 Continuité visuelle des pièces et chemin gagnant
+
+- Les carrés qui composent une même pièce doivent former une silhouette continue, dans la réserve, dans le ghost et une fois posés sur la grille.
+- Dans la réserve, les cellules d'une matrice se touchent sans gouttière ni bordure interne.
+- Sur le plateau, utiliser le `pieceId` pour reconnaître les voisins orthogonaux appartenant à la même pièce. Étendre leur remplissage dans la gouttière de la grille et supprimer les bordures internes correspondantes.
+- Deux pièces distinctes, même de même couleur et adjacentes, doivent rester visuellement séparables.
+- Les pièces blanches utilisent un léger contour ou une ombre externe pour rester lisibles sur le fond neutre.
+- Après une victoire par connexion, reconstruire un chemin précis reliant les deux bords opposés et surligner uniquement ses cellules avec un contour lumineux jaune/or animé.
+- Le surlignage doit respecter `prefers-reduced-motion`.
 
 ## 6. Architecture recommandée
 
@@ -494,13 +516,22 @@ OU
 
 Le plus grand score de zone est le maximum des tailles de composantes, ou zéro si le joueur n'a aucune case.
 
+Pour le surlignage final, conserver ou reconstruire les prédécesseurs d'un BFS à huit voisins :
+
+1. chercher d'abord un chemin depuis toutes les cases du bord gauche jusqu'au bord droit ;
+2. si aucun chemin horizontal n'existe, chercher depuis le bord supérieur jusqu'au bord inférieur ;
+3. au premier bord opposé atteint, remonter les prédécesseurs jusqu'à la source ;
+4. retourner uniquement cette liste ordonnée de cases comme chemin gagnant.
+
+Le moteur de victoire et le calcul du chemin doivent utiliser la même connectivité à huit voisins. Le chemin peut donc contenir des pas diagonaux.
+
 ### 7.7 Avancement du tour
 
 Après une pose valide :
 
 1. écrire les cases avec la couleur et l'ID de pièce ;
 2. décrémenter l'inventaire ;
-3. vider ou conserver la sélection selon le choix UX ; recommandation : conserver la forme seulement s'il en reste une, sinon désélectionner ;
+3. si le tour passe à l'adversaire, vider la sélection ; si l'adversaire est passé automatiquement et que le même joueur rejoue, conserver la sélection seulement s'il reste un exemplaire ;
 4. tester la victoire du joueur actif ;
 5. si victoire, terminer immédiatement ;
 6. remettre `consecutivePasses` à zéro ;
@@ -573,7 +604,8 @@ Scripts cibles :
 - les couleurs adverses ne relient jamais deux zones ;
 - une composante touchant un seul bord ne gagne pas ;
 - calcul correct de la plus grande composante ;
-- victoire immédiate après le coup qui complète le chemin.
+- victoire immédiate après le coup qui complète le chemin ;
+- reconstruction d'un chemin gagnant ordonné entre les deux bords, y compris pour un chemin uniquement diagonal.
 
 ### 8.6 Tests d'interface
 
@@ -581,12 +613,18 @@ Scripts cibles :
 - un premier clic sélectionne ;
 - un second clic sur la même forme tourne ;
 - `Retourner` transforme le grand L en J et S en Z ;
-- le compteur passe de 2 à 1 puis de 1 à 0 ;
+- chaque ligne de réserve affiche deux silhouettes, puis une, puis aucune ;
+- aucun nom de forme ni badge `×1`/`×2` n'est visible ; les informations restent présentes dans les attributs ARIA ;
+- les cellules d'une même pièce forment une silhouette continue dans la réserve, le ghost et la grille ;
+- les pièces de réserve et les pièces jouées ont une taille visuelle équivalente ;
 - le ghost change avec la colonne et l'orientation ;
 - un ghost invalide explique le refus ;
+- les entrées n'affichent que des flèches, sans numéro visible ;
 - une pose valide change le joueur ;
 - une passe forcée est annoncée ;
 - le panneau final distingue connexion, blocage et égalité ;
+- le panneau final ne recouvre jamais le plateau ;
+- une victoire par connexion surligne le chemin gagnant exact ;
 - `Nouvelle partie` restaure exactement les inventaires et une grille vide.
 
 ## 9. Ordre d'implémentation recommandé
@@ -610,6 +648,7 @@ Scripts cibles :
 - Implémenter BFS/DFS à huit voisins.
 - Détecter les deux axes de victoire.
 - Calculer la plus grande zone.
+- Reconstruire un chemin gagnant avec les prédécesseurs du BFS.
 - Implémenter les passes consécutives et le blocage.
 
 ### Étape 4 — Reducer
@@ -624,13 +663,18 @@ Scripts cibles :
 - Ajouter rotation et retournement.
 - Ajouter les neuf entrées et le ghost.
 - Ajouter messages de tour, passe et victoire.
+- Afficher directement zéro, une ou deux silhouettes dans chaque ligne de réserve, sans compteur textuel.
 
 ### Étape 6 — Finition visuelle et accessibilité
 
 - Travailler la hiérarchie visuelle bleu/blanc.
+- Unifier visuellement les cellules d'une même pièce à partir du `pieceId`.
+- Dimensionner les silhouettes de réserve comme les pièces jouées.
+- Supprimer les libellés visuels non indispensables et conserver leurs équivalents ARIA.
+- Garder le panneau final hors de la grille et surligner le chemin gagnant.
 - Ajouter focus clavier, libellés ARIA et contrastes.
 - Ajouter animation de chute avec respect de `prefers-reduced-motion`.
-- Vérifier les écrans de bureau et tablette.
+- Vérifier les écrans de bureau, tablette et mobile.
 
 ### Étape 7 — Vérification finale
 
@@ -651,6 +695,10 @@ Puis tester dans un navigateur au minimum :
 - refus d'un dépassement ;
 - victoire horizontale ;
 - victoire verticale ou diagonale ;
+- passage visuel d'une réserve de deux silhouettes à une puis à une ligne vide ;
+- continuité des silhouettes dans la réserve, le ghost et la grille ;
+- panneau final non modal et surlignage du chemin gagnant ;
+- absence de débordement horizontal sur tablette et mobile ;
 - passe forcée ;
 - nouvelle partie.
 
@@ -668,18 +716,26 @@ Le développement est terminé lorsque :
 - les victoires gauche-droite et haut-bas sont détectées immédiatement ;
 - les passes et le blocage total suivent les règles ;
 - les deux réserves et le joueur actif sont clairement visibles ;
+- chaque réserve montre directement deux, une ou zéro silhouette par forme, sans nom ni badge numérique visible ;
+- les pièces ont une silhouette continue et une taille visuelle cohérente entre réserve, ghost et plateau ;
+- les entrées de colonnes ne montrent que les flèches ;
+- aucun nom de pièce, angle de rotation ou aperçu redondant n'encombre la zone centrale ;
+- le panneau de fin ne recouvre pas la grille et le chemin gagnant exact est surligné ;
 - la partie est jouable intégralement à la souris et raisonnablement au clavier ;
 - tests, lint et build passent ;
 - la SPA ne dépend d'aucun serveur.
 
-## 11. Décisions à confirmer avant ou pendant l'implémentation
+## 11. Décisions UX appliquées
 
-1. **Égalité après blocage total** : la règle ne donne pas de départage. Recommandation : match nul.
-2. **Premier joueur** : recommandation actuelle, écran de configuration bleu/blanc avec rappel « le plus jeune commence ».
-3. **Convention de colonne** : recommandation actuelle, la colonne cliquée est l'ancre de la case la plus à gauche de la pièce normalisée.
-4. **Contrôle du miroir** : recommandation actuelle, bouton `Retourner` et touche `F`, en plus du clic répété qui reste réservé à la rotation.
+1. **Égalité après blocage total** : déclarer un match nul.
+2. **Premier joueur** : écran de configuration bleu/blanc avec rappel « le plus jeune commence » ; bleu sélectionné par défaut.
+3. **Convention de colonne** : la colonne cliquée est l'ancre de la case la plus à gauche de la pièce normalisée.
+4. **Contrôle du miroir** : bouton `Retourner` et touche `F`, en plus du clic répété qui reste réservé à la rotation.
+5. **Inventaire** : silhouettes réelles restantes, sans nom ni multiplicateur visible.
+6. **Fin de partie** : panneau compact non modal au-dessus de la grille et chemin gagnant surligné.
+7. **Densité visuelle** : supprimer les numéros de colonnes, le nom et l'angle de la sélection, les légendes de bords et les textes permanents redondants.
 
-Ces points n'affectent pas la topologie des pièces ni le moteur de règles principal. S'ils ne sont pas arbitrés, appliquer les recommandations ci-dessus et les documenter dans l'interface.
+Ces décisions font partie de la spécification et doivent être reproduites telles quelles.
 
 ## 12. Hors périmètre initial
 

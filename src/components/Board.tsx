@@ -1,13 +1,14 @@
 import { BOARD_SIZE } from '../game/types'
-import type { Board as BoardType, DropResult, PlayerId } from '../game/types'
+import type { Board as BoardType, DropResult, PlayerId, Point } from '../game/types'
 
 type BoardProps = {
   board: BoardType
   ghost: DropResult | null
   ghostPlayer: PlayerId
+  winningPath?: Point[]
 }
 
-export function Board({ board, ghost, ghostPlayer }: BoardProps) {
+export function Board({ board, ghost, ghostPlayer, winningPath = [] }: BoardProps) {
   const ghostCells = new Set(
     (ghost
       ? ghost.valid
@@ -16,11 +17,10 @@ export function Board({ board, ghost, ghostPlayer }: BoardProps) {
       : []
     ).map(({ x, y }) => `${x},${y}`),
   )
+  const winningCells = new Set(winningPath.map(({ x, y }) => `${x},${y}`))
 
   return (
     <div className="board-frame">
-      <div className="edge-label edge-label--top">HAUT</div>
-      <div className="edge-label edge-label--left">GAUCHE</div>
       <div
         className="board"
         role="grid"
@@ -30,9 +30,26 @@ export function Board({ board, ghost, ghostPlayer }: BoardProps) {
         {board.flatMap((row, y) =>
           row.map((cell, x) => {
             const isGhost = ghostCells.has(`${x},${y}`)
+            const samePiece = (otherX: number, otherY: number) =>
+              Boolean(
+                cell &&
+                  otherX >= 0 &&
+                  otherX < BOARD_SIZE &&
+                  otherY >= 0 &&
+                  otherY < BOARD_SIZE &&
+                  board[otherY][otherX]?.pieceId === cell.pieceId,
+              )
+            const joins = (otherX: number, otherY: number) =>
+              samePiece(otherX, otherY) ||
+              (isGhost && ghostCells.has(`${otherX},${otherY}`))
             const classNames = [
               'board-cell',
               cell ? `board-cell--${cell.player}` : '',
+              joins(x - 1, y) ? 'board-cell--join-left' : '',
+              joins(x + 1, y) ? 'board-cell--join-right' : '',
+              joins(x, y - 1) ? 'board-cell--join-up' : '',
+              joins(x, y + 1) ? 'board-cell--join-down' : '',
+              winningCells.has(`${x},${y}`) ? 'board-cell--winning' : '',
               isGhost ? `board-cell--ghost-${ghostPlayer}` : '',
               isGhost && ghost && !ghost.valid ? 'board-cell--ghost-invalid' : '',
             ]
@@ -49,9 +66,6 @@ export function Board({ board, ghost, ghostPlayer }: BoardProps) {
           }),
         )}
       </div>
-      <div className="edge-label edge-label--right">DROITE</div>
-      <div className="edge-label edge-label--bottom">BAS</div>
     </div>
   )
 }
-

@@ -16,6 +16,16 @@ const PLAYER_NAMES: Record<PlayerId, string> = {
   white: 'Blancs',
 }
 
+const PREVIEW_ROTATIONS = {
+  mono: 0,
+  domino: 0,
+  bar3: 0,
+  smallL: 0,
+  s: 1,
+  t: 0,
+  largeL: 0,
+} as const
+
 export function PieceTray({
   player,
   inventory,
@@ -44,7 +54,7 @@ export function PieceTray({
           return (
             <button
               type="button"
-              className={`piece-button${selected ? ' is-selected' : ''}`}
+              className={`piece-button${selected ? ' is-selected' : ''}${count === 0 ? ' is-empty' : ''}`}
               key={shapeId}
               disabled={!active || count === 0}
               aria-pressed={selected}
@@ -52,16 +62,17 @@ export function PieceTray({
               onClick={() => onSelect(shapeId)}
             >
               <span className="piece-button__visual">
-                <PieceShape
-                  shapeId={shapeId}
-                  player={player}
-                  rotation={selected ? selection.rotation : 0}
-                  flipped={selected ? selection.flipped : false}
-                  compact
-                />
+                {Array.from({ length: count }, (_, copy) => (
+                  <PieceShape
+                    shapeId={shapeId}
+                    player={player}
+                    rotation={selected ? selection.rotation : PREVIEW_ROTATIONS[shapeId]}
+                    flipped={selected ? selection.flipped : false}
+                    compact
+                    key={copy}
+                  />
+                ))}
               </span>
-              <span className="piece-button__name">{SHAPE_LABELS[shapeId]}</span>
-              <span className="piece-count">×{count}</span>
             </button>
           )
         })}
@@ -69,4 +80,3 @@ export function PieceTray({
     </aside>
   )
 }
-

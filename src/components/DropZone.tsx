@@ -32,11 +32,9 @@ export function DropZone({
           onFocus={() => onHover(column)}
           onClick={() => onDrop(column)}
         >
-          <span>{column + 1}</span>
           <span className="drop-arrow" aria-hidden="true">↓</span>
         </button>
       ))}
     </div>
   )
 }
-
