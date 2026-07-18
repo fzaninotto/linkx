@@ -4,6 +4,12 @@ type DropZoneProps = {
   enabled: boolean
   hoveredColumn: number | null
   invalid: boolean
+  /**
+   * Sans flèches : la bande reste une surface de visée alignée sur les colonnes,
+   * pour approcher la grille par le haut même lorsqu'elle est pleine. La pièce
+   * qui suit le pointeur tient alors lieu d'indication.
+   */
+  silent?: boolean
   onHover: (column: number | null) => void
   onDrop: (column: number) => void
 }
@@ -12,12 +18,13 @@ export function DropZone({
   enabled,
   hoveredColumn,
   invalid,
+  silent = false,
   onHover,
   onDrop,
 }: DropZoneProps) {
   return (
     <div
-      className="drop-zones"
+      className={`drop-zones${silent ? ' drop-zones--silent' : ''}`}
       aria-label="Colonnes d’entrée"
       onMouseLeave={() => onHover(null)}
     >
@@ -32,7 +39,9 @@ export function DropZone({
           onFocus={() => onHover(column)}
           onClick={() => onDrop(column)}
         >
-          <span className="drop-arrow" aria-hidden="true">↓</span>
+          {!silent && (
+            <span className="drop-arrow" aria-hidden="true">↓</span>
+          )}
         </button>
       ))}
     </div>

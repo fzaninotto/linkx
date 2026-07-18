@@ -7,6 +7,16 @@ export function createEmptyBoard(): Board {
   )
 }
 
+/**
+ * Colonne d'ancrage d'une pièce visée depuis `pointer`. La colonne pointée porte
+ * le centre de la forme, jamais son bord gauche, et la pièce reste entièrement
+ * sur le plateau : viser près d'un bord la fait buter contre ce bord.
+ */
+export function aimedColumn(pointer: number, width: number): number {
+  const anchor = pointer - Math.floor((width - 1) / 2)
+  return Math.min(Math.max(anchor, 0), BOARD_SIZE - width)
+}
+
 function cellsAt(
   orientation: Orientation,
   anchorX: number,

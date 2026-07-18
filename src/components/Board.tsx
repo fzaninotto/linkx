@@ -7,6 +7,10 @@ type BoardProps = {
   ghost: DropResult | null
   ghostPlayer: PlayerId
   winningPath?: Point[]
+  /** Visée au pointeur : la colonne survolée porte la pièce, le clic la pose. */
+  aiming?: boolean
+  onPointColumn?: (column: number | null) => void
+  onDropColumn?: (column: number) => void
 }
 
 type RenderedPiece = {
@@ -32,7 +36,15 @@ function boardPieces(board: BoardType): RenderedPiece[] {
   return [...pieces.values()]
 }
 
-export function Board({ board, ghost, ghostPlayer, winningPath = [] }: BoardProps) {
+export function Board({
+  board,
+  ghost,
+  ghostPlayer,
+  winningPath = [],
+  aiming = false,
+  onPointColumn,
+  onDropColumn,
+}: BoardProps) {
   const ghostPoints = ghost
     ? ghost.valid
       ? ghost.cells
@@ -44,10 +56,11 @@ export function Board({ board, ghost, ghostPlayer, winningPath = [] }: BoardProp
   return (
     <div className="board-frame">
       <div
-        className="board"
+        className={`board${aiming ? ' board--aiming' : ''}`}
         role="grid"
         aria-label="Plateau Linkx de 9 lignes par 9 colonnes"
         style={{ '--board-size': BOARD_SIZE } as React.CSSProperties}
+        onMouseLeave={aiming ? () => onPointColumn?.(null) : undefined}
       >
         <svg
           className="board-piece-layer"
@@ -90,6 +103,8 @@ export function Board({ board, ghost, ghostPlayer, winningPath = [] }: BoardProp
                 role="gridcell"
                 aria-label={`Ligne ${y + 1}, colonne ${x + 1}${cell ? `, ${cell.player === 'blue' ? 'bleu' : 'blanc'}` : ', vide'}${isGhost ? ', aperçu' : ''}`}
                 key={`${x}-${y}`}
+                onMouseEnter={aiming ? () => onPointColumn?.(x) : undefined}
+                onClick={aiming ? () => onDropColumn?.(x) : undefined}
               />
             )
           }),

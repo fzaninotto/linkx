@@ -184,7 +184,9 @@
 .piece-shape--compact { --piece-cell: 46px; }
 .piece-shape__silhouette { fill: var(--blue); stroke: var(--blue-outline); stroke-width: var(--piece-outline); stroke-linejoin: miter; }
 .piece-shape--white .piece-shape__silhouette { fill: var(--white-piece); stroke: var(--white-outline); }
-.piece-shape__silhouette--unavailable { fill: none; stroke-dasharray: 0.22 0.16; }
+/* Un exemplaire joué n'est qu'un contour pointillé : le remplissage doit tomber
+   pour les deux joueurs, y compris derrière la règle plus spécifique du blanc. */
+.piece-shape .piece-shape__silhouette--unavailable { fill: none; stroke-dasharray: 0.22 0.16; }
 
 /* Central play area */
 .play-area { display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 1.1rem 1.4rem 2rem; background: #f8f7f3; }
@@ -197,7 +199,7 @@
 .game-status p { margin: 0 auto; color: #59657a; font-size: 0.78rem; line-height: 1.4; text-align: center; }
 
 .selection-stage { position: relative; display: grid; width: min(100%, 520px); height: 150px; flex: 0 0 150px; place-items: center; }
-.selected-piece-preview { display: grid; width: 142px; height: 142px; place-items: center; }
+.selected-piece-preview { display: grid; width: 142px; height: 142px; place-items: center; cursor: pointer; }
 .selected-piece-preview .piece-shape { --piece-cell: 46px; }
 .selection-controls { position: absolute; right: 0; display: grid; gap: 0.45rem; }
 .control-button { display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 1px solid #c8cdd5; border-radius: 5px; background: #fff; color: #394458; font-size: 1.15rem; font-weight: 700; }
@@ -206,6 +208,12 @@
 
 .drop-zones { display: grid; width: min(100%, 520px); grid-template-columns: repeat(9, 1fr); gap: 3px; padding: 0 12px 6px; }
 .drop-zones-spacer { width: min(100%, 520px); height: 36px; }
+/* Bande de visée sans flèches : elle prolonge la grille vers le haut, sans rien
+   afficher ni réserver de survol propre. */
+.drop-zones--silent .drop-zone,
+.drop-zones--silent .drop-zone:hover:not(:disabled),
+.drop-zones--silent .drop-zone.is-hovered,
+.drop-zones--silent .drop-zone.is-invalid { border-color: transparent; background: transparent; }
 .drop-zone { display: flex; height: 30px; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 4px 4px 0 0; background: transparent; color: #8790a0; cursor: pointer; line-height: 1; }
 .drop-zone .drop-arrow { color: var(--blue); font-size: 1rem; font-weight: 800; transition: transform 120ms ease; }
 .drop-zone:hover:not(:disabled), .drop-zone.is-hovered { border-color: #b7cae8; background: #e7effa; color: #2d5897; }
@@ -217,6 +225,7 @@
 .board-frame { position: relative; width: min(100%, 520px); padding: 10px; border: 1px solid #aeb5c0; background: #d6d9de; box-shadow: 0 12px 30px rgb(27 37 55 / 14%); }
 .board { --board-padding: 4px; position: relative; display: grid; width: 100%; aspect-ratio: 1; grid-template-columns: repeat(var(--board-size), 1fr); grid-template-rows: repeat(var(--board-size), 1fr); padding: var(--board-padding); border: 4px solid #2f394b; background: #aeb5c0; }
 .board-cell { position: relative; min-width: 0; border: 0.5px solid #c7ccd3; background: #f2f1ed; }
+.board--aiming { cursor: pointer; }
 .board-piece-layer { position: absolute; z-index: 2; inset: var(--board-padding); width: auto; height: auto; overflow: visible; pointer-events: none; }
 .board-piece { fill: var(--blue); stroke: var(--blue-outline); stroke-width: var(--piece-outline); stroke-linejoin: miter; animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1); }
 .board-piece--white { fill: var(--white-piece); stroke: var(--white-outline); }

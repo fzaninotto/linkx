@@ -243,8 +243,9 @@ Interaction demandée :
 - nouveau clic sur l'exemplaire déjà sélectionné : rotation de 90° ;
 - bouton visible « Retourner » pour `grand L` et `S` ;
 - raccourci clavier `F` pour retourner ;
-- raccourci clavier `R` ou flèches pour tourner, en complément du clic ;
-- afficher la pièce sélectionnée dans une zone dédiée au-dessus des flèches d'entrée et de la grille ;
+- raccourci clavier `R`, `↑` ou `↓` pour tourner, en complément du clic ; `←` et `→` visent une colonne et `Entrée` pose ;
+- afficher la pièce sélectionnée dans une zone dédiée au-dessus de la grille ;
+- l'aperçu central est lui-même une commande de proximité : le clic gauche tourne, le clic droit retourne, sans menu contextuel du navigateur. Les boutons `Tourner`/`Retourner` restent affichés : ce sont eux qui font découvrir la commande, l'aperçu ne fait qu'éviter l'aller-retour du pointeur ;
 - appliquer les rotations et retournements uniquement à cet aperçu central et au ghost ; les silhouettes de réserve restent dans leur orientation canonique compacte.
 
 Le bouton de retournement peut être masqué ou désactivé pour les formes dont le miroir est redondant.
@@ -255,17 +256,18 @@ La zone de sélection doit conserver une hauteur fixe d'environ `150 px`, qu'une
 
 ### 5.4 Ghost et dépôt
 
-- Afficher neuf zones d'entrée cliquables au-dessus de la grille uniquement lorsqu'une pièce est sélectionnée.
-- Chaque zone affiche seulement une flèche. Ne pas afficher les numéros de colonnes ; conserver « colonne N » dans l'`aria-label` du bouton.
-- Le survol d'une entrée calcule immédiatement l'atterrissage de la pièce.
+La visée se fait directement sur la grille quand le pointeur sait survoler, et par la rangée de flèches sinon. Les deux chemins partagent la même règle de position.
+
+- Pointeur fin avec survol : dès qu'une pièce est sélectionnée, la grille entière **et la bande qui la surmonte** deviennent la surface de visée. La pièce suit horizontalement la colonne survolée et le clic la pose. Ne pas afficher de rangée de flèches dans ce cas : voir la pièce se déplacer suffit. La bande supérieure est indispensable : une grille presque pleine n'offrirait plus de case libre à survoler, et l'approche naturelle du pointeur se fait par le haut.
+- Pointeur grossier ou sans survol : afficher les neuf zones d'entrée cliquables au-dessus de la grille, uniquement lorsqu'une pièce est sélectionnée. Chaque zone affiche seulement une flèche. Ne pas afficher les numéros de colonnes ; conserver « colonne N » dans l'`aria-label` du bouton.
+- Clavier : `←` et `→` visent une colonne, `↑`, `↓` et `R` tournent, `F` retourne, `Entrée` ou `Espace` pose. Le jeu doit rester entièrement jouable au clavier alors que les flèches d'entrée ont disparu de l'écran.
 - L'aperçu ghost occupe exactement les cases finales calculées par le moteur.
 - Ghost valide : couleur du joueur avec transparence et contour positif.
-- Ghost invalide : rouge ou hachuré, avec une courte raison (`dépassement`, `collision`, `vide sous la pièce`).
-- Le clic sur l'entrée valide déclenche la pose.
-- Le clic sur une entrée invalide ne change pas l'état de la partie.
+- Ghost invalide : rouge ou hachuré, avec une courte raison (`collision`, `vide sous la pièce`).
+- Le clic sur une position invalide ne change pas l'état de la partie.
 - Après validation, animer visuellement la descente, mais appliquer la logique de jeu de façon déterministe et indépendante de l'animation.
 
-Convention recommandée : la colonne survolée représente la colonne de la case occupée la plus à gauche de la matrice normalisée. Les positions qui dépassent à droite sont montrées comme invalides. Documenter cette convention dans l'aide de jeu.
+Convention de visée, portée par `aimedColumn` et partagée par le survol, les flèches et le clavier : la colonne visée porte le **centre** de la matrice normalisée, jamais son bord gauche, et la pièce est retenue contre les bords du plateau au lieu de dépasser. Viser le bord droit avec une barre 3 la pose donc sur les colonnes 7, 8 et 9. Une largeur paire penche à gauche. Le moteur continue de refuser un ancrage hors plateau, mais l'interface ne peut plus en produire.
 
 ### 5.5 Retours d'état
 
@@ -287,8 +289,11 @@ Ne pas afficher de texte d'instruction permanent lorsque le visuel suffit. Les i
 
 - Les carrés qui composent une même pièce doivent former une silhouette continue, dans la réserve, dans le ghost et une fois posés sur la grille.
 - Dans la réserve, les cellules d'une matrice se touchent sans gouttière ni bordure interne.
-- La réserve et la grille partent des mêmes matrices et appellent la même fonction de calcul des voisins orthogonaux. Ne pas recréer manuellement une géométrie différente pour le plateau.
-- Sur le plateau, utiliser le `pieceId` pour regrouper les cases d'une même pièce et dessiner une silhouette SVG unique par pièce. Chaque case contribue un rectangle dont les côtés atteignent ou chevauchent très légèrement la limite commune avec ses voisins orthogonaux. Le chemin de remplissage ne possède aucun `stroke` : un trait appliqué aux sous-rectangles reste visible dans les angles concaves des L, T et S, même avec `paint-order`. Pour le contraste, produire uniquement un contour externe depuis l'alpha fusionné de la silhouette avec `feMorphology` (`dilate`), puis placer ce contour derrière `SourceGraphic`. Le filtre voit la forme pleine, jamais ses arêtes internes, et ne peut donc créer aucune encoche centrale. Ne jamais appliquer de `drop-shadow` CSS décalée aux chemins SVG du plateau : ses unités sont mises à l'échelle du `viewBox` et créent de grosses formes grises autour des pièces. La grille reste dessinée sous cette couche par les bordures fines des cases.
+- La réserve, l'aperçu central, le ghost et la grille partent des mêmes matrices et appellent la même fonction `getCellsOutlinePath`. Ne pas recréer manuellement une géométrie différente pour le plateau ni pour la réserve.
+- Une silhouette est un chemin SVG unique par pièce, tracé dans un `viewBox` exprimé en cases. Le contour est celui de l'union des cases, pas la juxtaposition de rectangles par case : parcourir les arêtes de bord de l'union, fusionner les segments colinéaires, puis décaler chaque arête vers l'intérieur du retrait. Deux cases qui ne se touchent que par un coin donnent deux boucles distinctes. Ne jamais empiler un rectangle par case : dans un angle rentrant de `L`, `T` ou `S`, la case du coin dépasse alors de la largeur du retrait et laisse une encoche visible dans le creux.
+- Le chemin porte directement `fill` et `stroke`. Comme il ne contient aucune arête interne, un trait ne peut plus apparaître dans les angles rentrants ; aucun filtre `feMorphology` n'est nécessaire. Ne jamais appliquer de `drop-shadow` CSS décalée aux chemins SVG du plateau : ses unités sont mises à l'échelle du `viewBox` et créent de grosses formes grises autour des pièces. La grille reste dessinée sous cette couche par les bordures fines des cases.
+- Le contour est un réglage partagé : `--piece-outline` fixe la même épaisseur, en unités de case, pour la réserve, l'aperçu, le ghost et la grille. Seule la teinte change avec le joueur, `--blue-outline` et `--white-outline`. Un exemplaire déjà joué reprend ce même contour en pointillé, sans remplissage.
+- Sur le plateau, utiliser le `pieceId` pour regrouper les cases d'une même pièce.
 - Les cellules des polyominos restent rectangulaires, sans arrondi aux angles rentrants. En particulier, le `S`/`Z` ne doit présenter aucun petit coin, encoche ou artefact à ses jonctions.
 - Deux pièces distinctes, même de même couleur et adjacentes, doivent rester visuellement séparables.
 - Les pièces blanches utilisent un contour externe gris sur fond gris bleuté pour rester lisibles, sans ajouter de lignes entre les cellules d'une même pièce.
@@ -717,11 +722,12 @@ Isoler ces scénarios dans `evaluation.test.ts` et décrire les grilles sous for
 - la pièce sélectionnée et sa rotation apparaissent uniquement dans la zone fixe au-dessus de la grille ;
 - au premier clic, la pièce centrale possède exactement la même orientation que la silhouette choisie dans la réserve ;
 - les cellules d'une même pièce forment une silhouette continue dans la réserve, le ghost et la grille ;
-- les `L`/`J`, `S`/`Z` et `T` posés sont rendus comme une silhouette SVG sans trait sur les sous-rectangles ; leur contour externe dérive de l'alpha fusionné et ne présente aucun artefact, bordure interne ou encoche dans les angles rentrants ;
+- les `L`/`J`, `S`/`Z` et `T` posés sont rendus comme une silhouette SVG unique, contour de l'union de leurs cases, sans bordure interne ni encoche dans les angles rentrants ;
+- une même forme a exactement le même contour dans la réserve, dans l'aperçu, dans le ghost et sur la grille : même retrait, même épaisseur de trait, seule la teinte distingue les deux joueurs ;
 - les pièces de réserve et les pièces jouées ont une taille visuelle équivalente ;
 - le ghost change avec la colonne et l'orientation ;
 - un ghost invalide explique le refus ;
-- les entrées n'affichent que des flèches, sans numéro visible ;
+- au survol, la pièce suit le pointeur au-dessus de la grille et aucune rangée de flèches n'est affichée ; sans survol, les entrées n'affichent que des flèches, sans numéro visible ;
 - une pose valide change le joueur ;
 - une passe forcée est annoncée ;
 - le panneau final distingue connexion, blocage et égalité ;
@@ -868,7 +874,7 @@ Le développement est terminé lorsque :
 8. **Sélection** : aperçu à l'échelle des réserves et rotations dans une zone centrale fixe ; la grille et les réserves ne bougent pas et la géométrie canonique de la réserve ne tourne jamais.
 9. **Contraste** : fond gris bleuté pour la réserve blanche et contour externe sombre pour ses pièces.
 10. **Tour actif** : aucune en-tête de réserve ; une flèche gauche/droite dans le bandeau central pointe vers la réserve du joueur actif.
-11. **Rendu du plateau** : une silhouette SVG globale par pièce, sans trait sur ses sous-rectangles et avec un contour externe calculé par morphologie sur l'alpha fusionné, élimine les encoches des L, S et T ; le chemin victorieux reçoit seulement un contour transparent qui préserve la couleur du joueur.
+11. **Rendu du plateau** : une silhouette SVG globale par pièce, tracée comme le contour de l'union de ses cases puis rentrée d'un retrait constant, élimine les encoches des L, S et T ; réserve et grille partagent ce chemin et le même trait ; le chemin victorieux reçoit seulement un contour transparent qui préserve la couleur du joueur.
 12. **Fixtures visuelles** : une query string `board` au format commun `B/W/.`, complétée éventuellement par `turn`, charge directement une position ; une victoire préexistante ouvre son état final.
 
 Ces décisions font partie de la spécification et doivent être reproduites telles quelles.

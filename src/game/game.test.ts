@@ -7,7 +7,7 @@ import {
 } from './connectivity'
 import { enumerateLegalMoves } from './legalMoves'
 import { BASE_SHAPES, createInitialInventory, matrixToPoints } from './pieces'
-import { calculateDrop, createEmptyBoard } from './placement'
+import { aimedColumn, calculateDrop, createEmptyBoard } from './placement'
 import { createInitialState, gameReducer } from './reducer'
 import { getOrientation, getUniqueOrientations, pointsKey } from './transforms'
 import { SHAPE_IDS } from './types'
@@ -67,6 +67,21 @@ describe('chute et support', () => {
     expect(mono).toMatchObject({ valid: true, anchorY: 8 })
     expect(domino).toMatchObject({ valid: true, anchorY: 8 })
     expect(barVertical).toMatchObject({ valid: true, anchorY: 6 })
+  })
+
+  it('centre la pièce visée sur la colonne pointée', () => {
+    // Barre 3 visée en colonne 4 : elle couvre 3, 4 et 5.
+    expect(aimedColumn(4, 3)).toBe(3)
+    // Mono : la colonne pointée est exactement la colonne occupée.
+    expect(aimedColumn(4, 1)).toBe(4)
+    // Largeur paire : le centre penche à gauche, sans ambiguïté.
+    expect(aimedColumn(4, 2)).toBe(4)
+  })
+
+  it('retient la pièce visée contre les bords du plateau', () => {
+    expect(aimedColumn(0, 3)).toBe(0)
+    expect(aimedColumn(8, 3)).toBe(6)
+    expect(aimedColumn(8, 1)).toBe(8)
   })
 
   it('refuse un dépassement horizontal', () => {
