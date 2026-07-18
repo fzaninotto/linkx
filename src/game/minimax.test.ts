@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { boardFromText } from './boardText'
 import { enumerateLegalMoves } from './legalMoves'
-import { TERMINAL_SCORE, chooseMinimaxMove, positionKey } from './minimax'
+import {
+  TERMINAL_SCORE,
+  chooseMinimaxMove,
+  classifyTranspositionBound,
+  positionKey,
+} from './minimax'
 import { createInitialInventory } from './pieces'
 import { createGamePosition, simulateLegalMove } from './simulation'
 import type { GamePosition } from './simulation'
@@ -330,6 +335,26 @@ describe('Minimax', () => {
     expect(key({ inventories: spend('white', { largeL: 1 }) })).not.toBe(reference)
     expect(key({ activePlayer: 'white' })).not.toBe(reference)
     expect(key({}, 3)).not.toBe(reference)
+  })
+
+  it('classe une borne par rapport à la fenêtre réellement explorée', () => {
+    const low = Number.NEGATIVE_INFINITY
+    const high = Number.POSITIVE_INFINITY
+
+    // Fenêtre reçue du parent, sans entrée en cache : le score est exact.
+    expect(classifyTranspositionBound(45, low, high)).toBe('exact')
+
+    // Même score, mais une entrée « borne basse 50 » a resserré alpha avant la
+    // boucle : la recherche n'a alors prouvé que « la valeur vaut au plus 45 ».
+    // Classer ce score avec la fenêtre du parent l'enregistrerait comme exact,
+    // or une entrée exacte est relue sans regarder la fenêtre de l'appelant.
+    expect(classifyTranspositionBound(45, 50, high)).toBe('upper')
+
+    // Symétrique : une entrée « borne haute » resserre bêta avant la boucle.
+    expect(classifyTranspositionBound(70, low, 60)).toBe('lower')
+
+    // Une valeur strictement à l'intérieur de la fenêtre resserrée reste exacte.
+    expect(classifyTranspositionBound(55, 50, 60)).toBe('exact')
   })
 
   it(

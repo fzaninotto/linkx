@@ -29,9 +29,29 @@ type SearchContext = {
   transpositions: Map<string, TranspositionEntry>
 }
 
+export type TranspositionBound = 'exact' | 'lower' | 'upper'
+
 type TranspositionEntry = {
   score: number
-  bound: 'exact' | 'lower' | 'upper'
+  bound: TranspositionBound
+}
+
+/**
+ * Classe la valeur d'un nœud par rapport à la fenêtre alpha-bêta réellement
+ * explorée, resserrement par la table de transposition compris.
+ *
+ * Une valeur obtenue dans une fenêtre resserrée n'est qu'une borne : la classer
+ * par rapport à la fenêtre reçue du parent la marquerait « exacte » à tort, et
+ * une entrée exacte est relue sans vérifier la fenêtre de l'appelant.
+ */
+export function classifyTranspositionBound(
+  score: number,
+  alpha: number,
+  beta: number,
+): TranspositionBound {
+  if (score <= alpha) return 'upper'
+  if (score >= beta) return 'lower'
+  return 'exact'
 }
 
 function finiteConnectionScore(score: number): number {
@@ -104,8 +124,6 @@ function minimax(
   if (depth === 0) return evaluatePosition(position, context.aiPlayer)
 
   const key = positionKey(position, depth)
-  const originalAlpha = alpha
-  const originalBeta = beta
   const cached = context.transpositions.get(key)
   if (cached) {
     if (cached.bound === 'exact') return cached.score
@@ -113,6 +131,10 @@ function minimax(
     if (cached.bound === 'upper') beta = Math.min(beta, cached.score)
     if (beta <= alpha) return cached.score
   }
+  // Fenêtre du nœud une fois l'entrée en cache appliquée : c'est elle qui donne
+  // son sens au score obtenu, donc c'est elle qui classe la borne stockée.
+  const nodeAlpha = alpha
+  const nodeBeta = beta
 
   const moves = enumerateLegalMoves(
     position.board,
@@ -139,12 +161,10 @@ function minimax(
     }
   }
 
-  const bound = bestScore <= originalAlpha
-    ? 'upper'
-    : bestScore >= originalBeta
-      ? 'lower'
-      : 'exact'
-  context.transpositions.set(key, { score: bestScore, bound })
+  context.transpositions.set(key, {
+    score: bestScore,
+    bound: classifyTranspositionBound(bestScore, nodeAlpha, nodeBeta),
+  })
   return bestScore
 }
 
