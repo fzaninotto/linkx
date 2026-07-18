@@ -1,6 +1,6 @@
 import { getOrientation } from '../game/transforms'
 import type { Orientation, PlayerId, Rotation, ShapeId } from '../game/types'
-import { getOrthogonalJoinClasses } from './pieceGeometry'
+import { getCellsOutlinePath } from './pieceGeometry'
 
 type PieceShapeProps = {
   shapeId?: ShapeId
@@ -22,44 +22,21 @@ export function PieceShape({
   unavailable = false,
 }: PieceShapeProps) {
   const shown = orientation ?? getOrientation(shapeId!, rotation, flipped)
-  const occupied = new Set(shown.cells.map(({ x, y }) => `${x},${y}`))
 
   return (
-    <span
+    <svg
       className={`piece-shape piece-shape--${player}${compact ? ' piece-shape--compact' : ''}`}
+      viewBox={`0 0 ${shown.width} ${shown.height}`}
       style={{
-        gridTemplateColumns: `repeat(${shown.width}, var(--piece-cell))`,
-        gridTemplateRows: `repeat(${shown.height}, var(--piece-cell))`,
+        width: `calc(${shown.width} * var(--piece-cell))`,
+        height: `calc(${shown.height} * var(--piece-cell))`,
       }}
       aria-hidden="true"
     >
-      {Array.from({ length: shown.width * shown.height }, (_, index) => {
-        const x = index % shown.width
-        const y = Math.floor(index / shown.width)
-        const filled = occupied.has(`${x},${y}`)
-        const isOccupied = (otherX: number, otherY: number) =>
-          occupied.has(`${otherX},${otherY}`)
-        const classNames = filled
-          ? [
-              'piece-shape__cell',
-              unavailable ? 'piece-shape__cell--unavailable' : '',
-              ...getOrthogonalJoinClasses(
-                'piece-shape__cell',
-                x,
-                y,
-                isOccupied,
-              ),
-            ]
-              .filter(Boolean)
-              .join(' ')
-          : ''
-        return (
-          <span
-            className={classNames}
-            key={`${x}-${y}`}
-          />
-        )
-      })}
-    </span>
+      <path
+        className={`piece-shape__silhouette${unavailable ? ' piece-shape__silhouette--unavailable' : ''}`}
+        d={getCellsOutlinePath(shown.cells)}
+      />
+    </svg>
   )
 }

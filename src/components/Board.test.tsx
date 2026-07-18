@@ -26,8 +26,8 @@ describe('surlignage du chemin gagnant', () => {
 
     expect(markup).toContain('board-piece--blue')
     expect(markup).toContain('board-winning-path')
-    expect(markup).toContain('<feMorphology')
-    expect(markup).toContain('filter="url(#board-outline-blue)"')
     expect(markup).not.toContain('board-cell--winning')
+    // Le contour vient du stroke de la silhouette fusionnée, plus d'un filtre.
+    expect(markup).not.toContain('<filter')
   })
 })

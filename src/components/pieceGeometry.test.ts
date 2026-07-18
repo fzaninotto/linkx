@@ -1,29 +1,58 @@
 import { describe, expect, it } from 'vitest'
-import { getJoinedCellBounds } from './pieceGeometry'
+import { getCellsOutlinePath, OUTLINE_INSET } from './pieceGeometry'
 
-function occupied(cells: readonly [number, number][]) {
-  const keys = new Set(cells.map(([x, y]) => `${x},${y}`))
-  return (x: number, y: number) => keys.has(`${x},${y}`)
+function points(path: string): [number, number][] {
+  return [...path.matchAll(/[ML] (-?[\d.]+) (-?[\d.]+)/g)].map(
+    ([, x, y]) => [Number(x), Number(y)] as [number, number],
+  )
 }
 
-describe('silhouettes continues du plateau', () => {
-  it('étend le carré central du T dans ses trois raccords', () => {
-    const isOccupied = occupied([[0, 0], [1, 0], [2, 0], [1, 1]])
-    const center = getJoinedCellBounds(1, 0, isOccupied)
+const cells = (coords: readonly [number, number][]) =>
+  coords.map(([x, y]) => ({ x, y }))
 
-    expect(center.left).toBeLessThan(1)
-    expect(center.right).toBeGreaterThan(2)
-    expect(center.bottom).toBeGreaterThan(1)
+describe('silhouettes continues du plateau', () => {
+  it('rentre les quatre coins d’une case isolée', () => {
+    const path = getCellsOutlinePath(cells([[0, 0]]))
+
+    expect(points(path)).toEqual([
+      [OUTLINE_INSET, OUTLINE_INSET],
+      [1 - OUTLINE_INSET, OUTLINE_INSET],
+      [1 - OUTLINE_INSET, 1 - OUTLINE_INSET],
+      [OUTLINE_INSET, 1 - OUTLINE_INSET],
+    ])
   })
 
-  it('fait se chevaucher les deux carrés centraux du S avec leurs voisins', () => {
-    const isOccupied = occupied([[1, 0], [0, 1], [1, 1], [0, 2]])
-    const centerLeft = getJoinedCellBounds(0, 1, isOccupied)
-    const centerRight = getJoinedCellBounds(1, 1, isOccupied)
+  it('fusionne deux cases voisines en un seul rectangle sans arête interne', () => {
+    const path = getCellsOutlinePath(cells([[0, 0], [1, 0]]))
 
-    expect(centerLeft.right).toBeGreaterThan(1)
-    expect(centerLeft.bottom).toBeGreaterThan(2)
-    expect(centerRight.left).toBeLessThan(1)
-    expect(centerRight.top).toBeLessThan(1)
+    expect(path.match(/M /g)).toHaveLength(1)
+    expect(points(path)).toHaveLength(4)
+    expect(points(path)).toContainEqual([2 - OUTLINE_INSET, OUTLINE_INSET])
+  })
+
+  it('referme exactement l’angle rentrant du L sans encoche', () => {
+    // (0,0) (1,0) (1,1) : le creux se situe autour du sommet (1,1).
+    const path = getCellsOutlinePath(cells([[0, 0], [1, 0], [1, 1]]))
+    const corner = points(path).filter(
+      ([x, y]) => x > 0.9 && x < 1.2 && y > 0.9 && y < 1.2,
+    )
+
+    // Un seul sommet dans le creux : les deux arêtes rentrées s’y rejoignent,
+    // au lieu de contourner le téton laissé par la case du coin.
+    expect(corner).toEqual([[1 + OUTLINE_INSET, 1 - OUTLINE_INSET]])
+  })
+
+  it('donne au S un contour de huit sommets, un par angle', () => {
+    const path = getCellsOutlinePath(cells([[1, 0], [0, 1], [1, 1], [0, 2]]))
+
+    expect(path.match(/M /g)).toHaveLength(1)
+    expect(points(path)).toHaveLength(8)
+  })
+
+  it('sépare deux cases qui ne se touchent que par un coin', () => {
+    const path = getCellsOutlinePath(cells([[0, 0], [1, 1]]))
+
+    expect(path.match(/M /g)).toHaveLength(2)
+    expect(points(path)).toHaveLength(8)
   })
 })

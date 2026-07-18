@@ -14,6 +14,11 @@
   --white-piece: #fffdfa;
   --line: #c9ced8;
   --red: #d9363e;
+  /* Contour des silhouettes, en unités de case : réserve, ghost et grille
+     partagent la même épaisseur, seule la teinte change avec le joueur. */
+  --piece-outline: 0.06;
+  --blue-outline: #0a479f;
+  --white-outline: #747d8b;
 }
 
 * { box-sizing: border-box; }

@@ -1,6 +1,6 @@
 import { BOARD_SIZE } from '../game/types'
 import type { Board as BoardType, DropResult, PlayerId, Point } from '../game/types'
-import { getJoinedCellBounds } from './pieceGeometry'
+import { getCellsOutlinePath } from './pieceGeometry'
 
 type BoardProps = {
   board: BoardType
@@ -13,60 +13,6 @@ type RenderedPiece = {
   id: string
   player: PlayerId
   cells: Point[]
-}
-
-type OutlineFilterProps = {
-  id: string
-  color: string
-  radius: number
-}
-
-function OutlineFilter({ id, color, radius }: OutlineFilterProps) {
-  return (
-    <filter
-      id={id}
-      x="-0.15"
-      y="-0.15"
-      width="9.3"
-      height="9.3"
-      filterUnits="userSpaceOnUse"
-      colorInterpolationFilters="sRGB"
-    >
-      <feMorphology
-        in="SourceAlpha"
-        operator="dilate"
-        radius={radius}
-        result="expanded"
-      />
-      <feFlood floodColor={color} result="outline-color" />
-      <feComposite
-        in="outline-color"
-        in2="expanded"
-        operator="in"
-        result="outline"
-      />
-      <feMerge>
-        <feMergeNode in="outline" />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    </filter>
-  )
-}
-
-function cellsPath(cells: readonly Point[]): string {
-  const occupied = new Set(cells.map(({ x, y }) => `${x},${y}`))
-  const isOccupied = (x: number, y: number) => occupied.has(`${x},${y}`)
-
-  return cells
-    .map(({ x, y }) => {
-      const { left, right, top, bottom } = getJoinedCellBounds(
-        x,
-        y,
-        isOccupied,
-      )
-      return `M ${left} ${top} H ${right} V ${bottom} H ${left} Z`
-    })
-    .join(' ')
 }
 
 function boardPieces(board: BoardType): RenderedPiece[] {
@@ -109,52 +55,23 @@ export function Board({ board, ghost, ghostPlayer, winningPath = [] }: BoardProp
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <defs>
-            <OutlineFilter
-              id="board-outline-blue"
-              color="#0a479f"
-              radius={0.025}
-            />
-            <OutlineFilter
-              id="board-outline-white"
-              color="#747d8b"
-              radius={0.04}
-            />
-            <OutlineFilter
-              id="board-outline-ghost-blue"
-              color="#125cbf"
-              radius={0.035}
-            />
-            <OutlineFilter
-              id="board-outline-ghost-white"
-              color="#5f6877"
-              radius={0.035}
-            />
-            <OutlineFilter
-              id="board-outline-ghost-invalid"
-              color="#d9363e"
-              radius={0.035}
-            />
-          </defs>
           {pieces.map((piece) => (
             <path
               className={`board-piece board-piece--${piece.player}`}
-              d={cellsPath(piece.cells)}
-              filter={`url(#board-outline-${piece.player})`}
+              d={getCellsOutlinePath(piece.cells)}
               key={piece.id}
             />
           ))}
           {ghost && (
             <path
               className={`board-piece board-piece--ghost-${ghostPlayer}${ghost.valid ? '' : ' board-piece--ghost-invalid'}`}
-              d={cellsPath(ghostPoints)}
-              filter={`url(#board-outline-${ghost.valid ? `ghost-${ghostPlayer}` : 'ghost-invalid'})`}
+              d={getCellsOutlinePath(ghostPoints)}
             />
           )}
           {winningPath.length > 0 && (
             <path
               className="board-winning-path"
-              d={cellsPath(winningPath)}
+              d={getCellsOutlinePath(winningPath)}
             />
           )}
         </svg>
