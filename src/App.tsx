@@ -14,15 +14,20 @@ import { aimedColumn, calculateDrop } from './game/placement'
 import { createInitialState, gameReducer } from './game/reducer'
 import { getOrientation } from './game/transforms'
 import { createGameStateFromSearch } from './game/queryState'
+import { chooseMinimaxMove } from './game/minimax'
 import { usePointerHasHover } from './components/usePointerHasHover'
-import { BOARD_SIZE } from './game/types'
-import type { InvalidDropReason, PlayerId } from './game/types'
+import { BOARD_SIZE, PLAYER_IDS } from './game/types'
+import type { GameMode, InvalidDropReason } from './game/types'
 
 const DROP_MESSAGES: Record<InvalidDropReason, string> = {
   'horizontal-bounds': 'Cette orientation dépasse du plateau.',
   overflow: 'La colonne est bouchée : la pièce dépasse en haut.',
   unsupported: 'Pose impossible : un vide resterait sous la pièce.',
 }
+
+/** Laisse le temps d'afficher « réfléchit… » et de suivre le coup de l'ordi. */
+const AI_THINKING_DELAY = 500
+const AI_GLOW_DURATION = 2400
 
 function App() {
   const [state, dispatch] = useReducer(gameReducer, undefined, () => {
@@ -33,10 +38,21 @@ function App() {
       return createInitialState()
     }
   })
-  const [firstPlayer, setFirstPlayer] = useState<PlayerId>('blue')
   const [pointedColumn, setPointedColumn] = useState<number | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [glowPieceId, setGlowPieceId] = useState<string | null>(null)
   const pointerHasHover = usePointerHasHover()
+
+  const startGame = (mode: GameMode) =>
+    dispatch({
+      type: 'START_GAME',
+      // Le tirage au sort remplace le choix manuel du premier joueur.
+      firstPlayer: PLAYER_IDS[Math.floor(Math.random() * PLAYER_IDS.length)],
+      mode,
+    })
+
+  const aiTurn =
+    state.phase === 'playing' && state.activePlayer === state.aiPlayer
 
   const orientation = state.selection
     ? getOrientation(
@@ -73,6 +89,43 @@ function App() {
   useEffect(() => {
     setPointedColumn(null)
   }, [state.activePlayer, state.selection?.shapeId])
+
+  // Tour de l'ordinateur : la recherche est synchrone et bloque brièvement le
+  // rendu, d'où le délai qui laisse d'abord peindre le message d'attente.
+  useEffect(() => {
+    if (!aiTurn) return
+    const timer = setTimeout(() => {
+      const decision = chooseMinimaxMove({
+        board: state.board,
+        inventories: state.inventories,
+        activePlayer: state.activePlayer,
+      })
+      if (!decision) return
+      const { shapeId, orientation, column } = decision.move
+      dispatch({
+        type: 'PLAY_AI_MOVE',
+        shapeId,
+        rotation: orientation.rotation,
+        flipped: orientation.flipped,
+        column,
+      })
+    }, AI_THINKING_DELAY)
+    return () => clearTimeout(timer)
+  }, [aiTurn, state.activePlayer, state.board, state.inventories])
+
+  // La pièce de l'ordinateur brille un moment : sans cela, le plateau change
+  // tout seul et le joueur ne voit pas ce qui vient d'être posé.
+  const aiPlacedPieceId =
+    state.aiPlayer && state.lastPlacedPieceId?.startsWith(`${state.aiPlayer}-`)
+      ? state.lastPlacedPieceId
+      : null
+
+  useEffect(() => {
+    if (!aiPlacedPieceId) return
+    setGlowPieceId(aiPlacedPieceId)
+    const timer = setTimeout(() => setGlowPieceId(null), AI_GLOW_DURATION)
+    return () => clearTimeout(timer)
+  }, [aiPlacedPieceId])
 
   useEffect(() => {
     if (state.phase !== 'playing') return
@@ -114,12 +167,7 @@ function App() {
   if (state.phase === 'setup') {
     return (
       <>
-        <SetupPanel
-          firstPlayer={firstPlayer}
-          onChange={setFirstPlayer}
-          onStart={() => dispatch({ type: 'START_GAME', firstPlayer })}
-          onShowRules={() => setRulesOpen(true)}
-        />
+        <SetupPanel onStart={startGame} onShowRules={() => setRulesOpen(true)} />
         {rulesOpen && <RulesPanel onClose={() => setRulesOpen(false)} />}
       </>
     )
@@ -164,6 +212,7 @@ function App() {
                 activePlayer={state.activePlayer}
                 event={state.lastEvent}
                 ghostMessage={ghostMessage}
+                thinking={aiTurn}
               />
             )}
           </div>
@@ -234,6 +283,7 @@ function App() {
             ghost={state.phase === 'playing' ? ghost : null}
             ghostPlayer={state.activePlayer}
             winningPath={winningPath}
+            glowPieceId={glowPieceId}
             aiming={aiming && pointerHasHover}
             onPointColumn={setPointedColumn}
             onDropColumn={(column) => {
@@ -249,7 +299,7 @@ function App() {
           player="white"
           inventory={state.inventories.white}
           playedCopies={state.playedCopies.white}
-          active={state.phase === 'playing' && state.activePlayer === 'white'}
+          active={state.phase === 'playing' && state.activePlayer === 'white' && !aiTurn}
           selection={state.activePlayer === 'white' ? state.selection : null}
           onSelect={(shapeId, copy) => dispatch({ type: 'SELECT_SHAPE', player: 'white', shapeId, copy })}
         />

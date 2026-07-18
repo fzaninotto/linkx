@@ -242,6 +242,84 @@ describe('coups et reducer', () => {
   })
 })
 
+describe('partie contre l’ordinateur', () => {
+  const startAi = (firstPlayer: PlayerId = 'white') =>
+    gameReducer(createInitialState(), {
+      type: 'START_GAME',
+      firstPlayer,
+      mode: 'ai',
+    })
+
+  it('confie les blancs à l’ordinateur', () => {
+    const state = startAi()
+    expect(state.mode).toBe('ai')
+    expect(state.aiPlayer).toBe('white')
+  })
+
+  it('reste en mode deux joueurs par défaut', () => {
+    const state = gameReducer(createInitialState(), {
+      type: 'START_GAME',
+      firstPlayer: 'blue',
+    })
+    expect(state.mode).toBe('human')
+    expect(state.aiPlayer).toBeNull()
+  })
+
+  it('pose la pièce de l’ordinateur, consomme un exemplaire et rend la main', () => {
+    let state = startAi()
+    state = gameReducer(state, {
+      type: 'PLAY_AI_MOVE',
+      shapeId: 'mono',
+      rotation: 0,
+      flipped: false,
+      column: 3,
+    })
+    expect(state.board[8][3]?.player).toBe('white')
+    expect(state.inventories.white.mono).toBe(1)
+    expect(state.playedCopies.white.mono).toEqual([true, false])
+    expect(state.activePlayer).toBe('blue')
+    // La sélection ne survit pas au coup de l'ordi : elle est propre au joueur.
+    expect(state.selection).toBeNull()
+    expect(state.lastPlacedPieceId).toBe('white-1')
+  })
+
+  it('consomme le second exemplaire au coup suivant', () => {
+    let state = startAi()
+    for (const column of [3, 5]) {
+      state = gameReducer(state, {
+        type: 'PLAY_AI_MOVE',
+        shapeId: 'mono',
+        rotation: 0,
+        flipped: false,
+        column,
+      })
+      state = gameReducer(state, { type: 'SELECT_SHAPE', player: 'blue', shapeId: 'mono' })
+      state = gameReducer(state, { type: 'DROP_SELECTED_SHAPE', column: 0 })
+    }
+    expect(state.inventories.white.mono).toBe(0)
+    expect(state.playedCopies.white.mono).toEqual([true, true])
+  })
+
+  it('ignore un coup de l’ordinateur hors de son tour', () => {
+    const state = startAi('blue')
+    expect(
+      gameReducer(state, {
+        type: 'PLAY_AI_MOVE',
+        shapeId: 'mono',
+        rotation: 0,
+        flipped: false,
+        column: 3,
+      }),
+    ).toBe(state)
+  })
+
+  it('ignore une pose manuelle pendant le tour de l’ordinateur', () => {
+    let state = startAi()
+    state = { ...state, selection: { shapeId: 'mono', copy: 0, rotation: 0, flipped: false } }
+    expect(gameReducer(state, { type: 'DROP_SELECTED_SHAPE', column: 3 })).toBe(state)
+  })
+})
+
 describe('connexions', () => {
   it('détecte les connexions horizontales, verticales et diagonales', () => {
     const horizontal = createEmptyBoard()

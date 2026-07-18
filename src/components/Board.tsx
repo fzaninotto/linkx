@@ -7,6 +7,8 @@ type BoardProps = {
   ghost: DropResult | null
   ghostPlayer: PlayerId
   winningPath?: Point[]
+  /** Pièce à faire briller, le temps que le joueur repère le coup de l'ordi. */
+  glowPieceId?: string | null
   /** Visée au pointeur : la colonne survolée porte la pièce, le clic la pose. */
   aiming?: boolean
   onPointColumn?: (column: number | null) => void
@@ -41,6 +43,7 @@ export function Board({
   ghost,
   ghostPlayer,
   winningPath = [],
+  glowPieceId = null,
   aiming = false,
   onPointColumn,
   onDropColumn,
@@ -70,7 +73,7 @@ export function Board({
         >
           {pieces.map((piece) => (
             <path
-              className={`board-piece board-piece--${piece.player}`}
+              className={`board-piece board-piece--${piece.player}${piece.id === glowPieceId ? ' board-piece--glowing' : ''}`}
               d={getCellsOutlinePath(piece.cells)}
               key={piece.id}
             />

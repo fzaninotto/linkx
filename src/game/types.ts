@@ -67,8 +67,13 @@ export type GameEvent =
   | { type: 'invalid'; reason: InvalidDropReason }
   | null
 
+export type GameMode = 'human' | 'ai'
+
 export type GameState = {
   phase: 'setup' | 'playing' | 'finished'
+  mode: GameMode
+  /** Couleur tenue par l'ordinateur, `null` en partie à deux joueurs. */
+  aiPlayer: PlayerId | null
   board: Board
   inventories: Record<PlayerId, Inventory>
   playedCopies: Record<PlayerId, PlayedCopies>
@@ -78,10 +83,19 @@ export type GameState = {
   result: GameResult | null
   lastEvent: GameEvent
   nextPieceId: number
+  /** Dernière pièce posée : sert à la mettre en évidence après un coup de l'ordi. */
+  lastPlacedPieceId: string | null
 }
 
 export type GameAction =
-  | { type: 'START_GAME'; firstPlayer: PlayerId }
+  | { type: 'START_GAME'; firstPlayer: PlayerId; mode?: GameMode }
+  | {
+      type: 'PLAY_AI_MOVE'
+      shapeId: ShapeId
+      rotation: Rotation
+      flipped: boolean
+      column: number
+    }
   | { type: 'SELECT_SHAPE'; player: PlayerId; shapeId: ShapeId; copy?: 0 | 1 }
   | { type: 'ROTATE_SELECTION' }
   | { type: 'FLIP_SELECTION' }

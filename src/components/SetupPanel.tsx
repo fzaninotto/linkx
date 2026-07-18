@@ -1,18 +1,26 @@
-import type { PlayerId } from '../game/types'
+import type { GameMode } from '../game/types'
 
 type SetupPanelProps = {
-  firstPlayer: PlayerId
-  onChange: (player: PlayerId) => void
-  onStart: () => void
+  onStart: (mode: GameMode) => void
   onShowRules: () => void
 }
 
-export function SetupPanel({
-  firstPlayer,
-  onChange,
-  onStart,
-  onShowRules,
-}: SetupPanelProps) {
+const MODES: { id: GameMode; label: string; hint: string; icon: string }[] = [
+  {
+    id: 'human',
+    label: 'À deux joueurs',
+    hint: 'Chacun son tour sur le même écran.',
+    icon: '👥',
+  },
+  {
+    id: 'ai',
+    label: 'Contre l’ordinateur',
+    hint: 'Vous jouez les bleus, l’ordinateur les blancs.',
+    icon: '🤖',
+  },
+]
+
+export function SetupPanel({ onStart, onShowRules }: SetupPanelProps) {
   return (
     <main className="setup-screen">
       <section className="setup-card">
@@ -21,35 +29,37 @@ export function SetupPanel({
           <span />
           <span />
         </div>
-        <p className="overline">Jeu de connexion · 2 joueurs</p>
+        <p className="overline">Jeu de connexion</p>
         <h1 className="game-title">LINKX</h1>
         <p className="setup-intro">
           Faites tomber vos pièces et reliez deux bords opposés avant votre adversaire.
           Les diagonales comptent.
         </p>
 
-        <fieldset className="first-player">
-          <legend>Qui commence ?</legend>
-          <p>Dans la règle physique, le plus jeune joueur commence.</p>
-          <div className="player-choice">
-            {(['blue', 'white'] as const).map((player) => (
-              <button
-                type="button"
-                className={`choice-button choice-button--${player}${firstPlayer === player ? ' is-selected' : ''}`}
-                aria-pressed={firstPlayer === player}
-                onClick={() => onChange(player)}
-                key={player}
-              >
-                <span className="choice-disc" aria-hidden="true" />
-                {player === 'blue' ? 'Les bleus' : 'Les blancs'}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <div className="mode-choice">
+          {MODES.map((mode) => (
+            <button
+              type="button"
+              className={`mode-button mode-button--${mode.id}`}
+              onClick={() => onStart(mode.id)}
+              key={mode.id}
+            >
+              <span className="mode-icon" aria-hidden="true">
+                {mode.icon}
+              </span>
+              <span className="mode-text">
+                <strong>{mode.label}</strong>
+                <small>{mode.hint}</small>
+              </span>
+              <span className="mode-arrow" aria-hidden="true">
+                →
+              </span>
+            </button>
+          ))}
+        </div>
 
-        <button type="button" className="primary-button" onClick={onStart}>
-          Commencer la partie <span aria-hidden="true">→</span>
-        </button>
+        <p className="setup-note">La couleur qui commence est tirée au sort.</p>
+
         <button type="button" className="text-button" onClick={onShowRules}>
           Lire les règles
         </button>
@@ -57,4 +67,3 @@ export function SetupPanel({
     </main>
   )
 }
-
