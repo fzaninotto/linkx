@@ -1,13 +1,65 @@
 import { describe, expect, it } from 'vitest'
+import { boardFromText } from './boardText'
 import { enumerateLegalMoves } from './legalMoves'
-import { chooseMinimaxMove } from './minimax'
+import { TERMINAL_SCORE, chooseMinimaxMove, positionKey } from './minimax'
+import { createInitialInventory } from './pieces'
 import { createGamePosition, simulateLegalMove } from './simulation'
 import type { GamePosition } from './simulation'
 import { SHAPE_IDS } from './types'
-import type { GameResult, PlayerId, Rotation, ShapeId } from './types'
+import type {
+  GameResult,
+  Inventory,
+  PlayerId,
+  Rotation,
+  ShapeId,
+} from './types'
 
 const STATISTICAL_GAME_COUNT = 20
 const MINIMUM_WIN_RATE = 0.8
+
+/**
+ * Bleu tient les colonnes 0 à 6 de la ligne du bas : deux monos supplémentaires
+ * le relient au bord droit. Blanc n'a aucune connexion possible, mais sa zone de
+ * neuf cases lui donne la victoire en cas de blocage total.
+ */
+const TWO_MONOS_FROM_WINNING = `
+  .........
+  .........
+  .........
+  .........
+  .........
+  ...WWW...
+  ...WWW...
+  ...WWW...
+  BBBBBBB..
+`
+
+function inventoryOf(counts: Partial<Inventory>): Inventory {
+  return {
+    mono: 0,
+    domino: 0,
+    bar3: 0,
+    smallL: 0,
+    s: 0,
+    t: 0,
+    largeL: 0,
+    ...counts,
+  }
+}
+
+/** Position ci-dessus, blanc sans réserve : bleu enchaîne autant qu'il le peut. */
+function positionWithBlueMonos(count: 1 | 2): GamePosition {
+  return {
+    board: boardFromText(TWO_MONOS_FROM_WINNING, {
+      groupOrthogonalComponents: true,
+    }),
+    inventories: {
+      blue: inventoryOf({ mono: count }),
+      white: inventoryOf({}),
+    },
+    activePlayer: 'blue',
+  }
+}
 
 function randomForSeed(seed: number): () => number {
   let state = seed >>> 0
@@ -180,6 +232,104 @@ describe('Minimax', () => {
       reason: 'stalemate',
       largestZones: { blue: 1, white: 0 },
     })
+  })
+
+  it('ne rejoue pas le dernier exemplaire d’une forme déjà consommée', () => {
+    // Avec deux monos, bleu relie le bord droit en deux poses consécutives.
+    const winnable = chooseMinimaxMove(positionWithBlueMonos(2), { depth: 2 })
+    expect(winnable?.score).toBeGreaterThanOrEqual(TERMINAL_SCORE)
+
+    // Avec un seul mono, la même ligne n'existe plus : après sa pose, bleu n'a
+    // plus rien à jouer et perd le blocage total au nombre de cases connectées.
+    // Un inventaire mal propagé rejouerait le mono et croirait gagner.
+    const decision = chooseMinimaxMove(positionWithBlueMonos(1), { depth: 2 })
+    expect(decision?.score).toBeLessThanOrEqual(-TERMINAL_SCORE)
+  })
+
+  it('énumère les réponses adverses avec la réserve de l’adversaire', () => {
+    // Bleu tient les colonnes 0 à 5 du bas : seule sa barre 3, posée en colonne
+    // 6, atteint le bord droit. L'ordinateur n'a plus de barre 3 : s'il évaluait
+    // les réponses de bleu avec sa propre réserve, il ne verrait pas la menace.
+    const position: GamePosition = {
+      board: boardFromText(
+        `
+          .........
+          .........
+          .........
+          .........
+          .........
+          .........
+          .........
+          .........
+          BBBBBB...
+        `,
+        { groupOrthogonalComponents: true },
+      ),
+      inventories: {
+        blue: inventoryOf({ mono: 1, bar3: 1 }),
+        white: inventoryOf({ mono: 2 }),
+      },
+      activePlayer: 'white',
+    }
+    expect(position.inventories.white.bar3).toBe(0)
+
+    const decision = chooseMinimaxMove(position, { depth: 2 })
+    expect(decision).not.toBeNull()
+    if (!decision) return
+
+    const afterAi = simulateLegalMove(position, decision.move)
+    const blueStillWins = enumerateLegalMoves(
+      afterAi.position.board,
+      afterAi.position.inventories.blue,
+    ).some(
+      (move) => simulateLegalMove(afterAi.position, move).result?.winner === 'blue',
+    )
+    expect(blueStillWins).toBe(false)
+  })
+
+  it('traite un adversaire sans coup légal comme une passe et enchaîne', () => {
+    const position = positionWithBlueMonos(2)
+    const decision = chooseMinimaxMove(position, { depth: 2 })
+    expect(decision).not.toBeNull()
+    if (!decision) return
+
+    // La victoire n'est trouvée que si la recherche rend la main à bleu au lieu
+    // de traiter le blanc bloqué comme une impasse ou comme une défaite.
+    const afterFirst = simulateLegalMove(position, decision.move)
+    expect(afterFirst.result).toBeNull()
+    expect(afterFirst.position.activePlayer).toBe('blue')
+
+    const second = chooseMinimaxMove(afterFirst.position, { depth: 1 })
+    expect(second).not.toBeNull()
+    if (!second) return
+    expect(simulateLegalMove(afterFirst.position, second.move).result).toEqual({
+      winner: 'blue',
+      reason: 'connection',
+    })
+  })
+
+  it('distingue deux réserves et deux joueurs au trait sur un même plateau', () => {
+    const board = boardFromText(TWO_MONOS_FROM_WINNING)
+    const inventories = {
+      blue: createInitialInventory(),
+      white: createInitialInventory(),
+    }
+    const key = (changed: Partial<GamePosition> = {}, depth = 2) =>
+      positionKey({ board, inventories, activePlayer: 'blue', ...changed }, depth)
+    const spend = (player: PlayerId, counts: Partial<Inventory>) => ({
+      ...inventories,
+      [player]: { ...inventories[player], ...counts },
+    })
+    const reference = key()
+
+    expect(key({ inventories: structuredClone(inventories) })).toBe(reference)
+    // Deux monos ou un domino laissent le même plateau : seules les réserves les
+    // séparent, sans quoi la table de transposition confondrait les deux nœuds.
+    expect(key({ inventories: spend('blue', { mono: 0 }) })).not.toBe(reference)
+    expect(key({ inventories: spend('blue', { domino: 1 }) })).not.toBe(reference)
+    expect(key({ inventories: spend('white', { largeL: 1 }) })).not.toBe(reference)
+    expect(key({ activePlayer: 'white' })).not.toBe(reference)
+    expect(key({}, 3)).not.toBe(reference)
   })
 
   it(

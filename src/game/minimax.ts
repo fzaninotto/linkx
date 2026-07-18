@@ -8,7 +8,8 @@ import { BOARD_SIZE, SHAPE_IDS } from './types'
 import type { GameResult, PlayerId } from './types'
 
 const DEFAULT_DEPTH = 2
-const TERMINAL_SCORE = 1_000_000
+/** Valeur d'une partie terminée : elle domine toujours l'heuristique. */
+export const TERMINAL_SCORE = 1_000_000
 const CONNECTION_WEIGHT = 100
 const UNREACHABLE_SCORE = BOARD_SIZE * BOARD_SIZE + 1
 
@@ -59,7 +60,13 @@ function evaluateResult(
     : -TERMINAL_SCORE - remainingDepth
 }
 
-function positionKey(position: GamePosition, depth: number): string {
+/**
+ * Clé de la table de transposition. Deux nœuds ne partagent une valeur que s'ils
+ * ont la même profondeur restante, le même joueur au trait, les mêmes réserves
+ * et le même plateau. Les réserves sont indispensables : deux monos et un domino
+ * laissent le même plateau mais pas les mêmes coups futurs.
+ */
+export function positionKey(position: GamePosition, depth: number): string {
   const board = position.board
     .map((row) =>
       row
