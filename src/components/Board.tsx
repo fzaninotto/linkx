@@ -22,7 +22,7 @@ type RenderedPiece = {
   cells: Point[]
 }
 
-function boardPieces(board: BoardType): RenderedPiece[] {
+function boardPieces(board: BoardType): (RenderedPiece & { outline: string })[] {
   const pieces = new Map<string, RenderedPiece>()
   board.forEach((row, y) =>
     row.forEach((cell, x) => {
@@ -36,7 +36,12 @@ function boardPieces(board: BoardType): RenderedPiece[] {
       pieces.set(cell.pieceId, piece)
     }),
   )
-  return [...pieces.values()]
+  // Le contour sert deux fois — la dalle teintée et le reflet qui la nappe — et
+  // reste tracé une seule fois : les deux couches ne peuvent pas se désaligner.
+  return [...pieces.values()].map((piece) => ({
+    ...piece,
+    outline: getCellsOutlinePath(piece.cells),
+  }))
 }
 
 export function Board({
@@ -55,6 +60,7 @@ export function Board({
       : ghost.previewCells
     : []
   const ghostCells = new Set(ghostPoints.map(({ x, y }) => `${x},${y}`))
+  const ghostOutline = getCellsOutlinePath(ghostPoints)
   const pieces = boardPieces(board)
 
   return (
@@ -78,15 +84,31 @@ export function Board({
           {pieces.map((piece) => (
             <path
               className={`board-piece board-piece--${piece.player}${piece.id === glowPieceId ? ' board-piece--glowing' : ''}`}
-              d={getCellsOutlinePath(piece.cells)}
+              d={piece.outline}
               key={piece.id}
             />
           ))}
-          {ghost && (
+          {/* Les reflets viennent après toutes les dalles, jamais entrelacés :
+              l'ombre portée d'une pièce doit tomber sur la matière de sa voisine,
+              pas sur la lumière qui la nappe. */}
+          {pieces.map((piece) => (
             <path
-              className={`board-piece board-piece--ghost-${ghostPlayer}${ghost.valid ? '' : ' board-piece--ghost-invalid'}`}
-              d={getCellsOutlinePath(ghostPoints)}
+              className="board-piece-sheen"
+              d={piece.outline}
+              key={`sheen-${piece.id}`}
             />
+          ))}
+          {ghost && (
+            <>
+              <path
+                className={`board-piece board-piece--ghost-${ghostPlayer}${ghost.valid ? '' : ' board-piece--ghost-invalid'}`}
+                d={ghostOutline}
+              />
+              <path
+                className="board-piece-sheen board-piece-sheen--ghost"
+                d={ghostOutline}
+              />
+            </>
           )}
           {winningPath.length > 0 && (
             <path

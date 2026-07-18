@@ -231,6 +231,9 @@
   filter: url(#plexi-relief);
 }
 .piece-shape--white .piece-shape__silhouette { fill: var(--white-piece); fill-opacity: var(--white-fill-opacity); stroke: var(--white-outline); }
+/* Le reflet nappe la dalle sans la redessiner : même chemin, aucun contour, et
+   le dégradé est ancré sur la scène, donc il ne tourne pas avec la pièce. */
+.piece-shape__sheen { fill: url(#plexi-sheen); stroke: none; pointer-events: none; }
 /* La réserve dessine petit : même lumière, relief et ombre atténués pour que
    les silhouettes voisines ne se marchent pas dessus. */
 .piece-shape--compact .piece-shape__silhouette { filter: url(#plexi-relief-soft); }
@@ -302,6 +305,12 @@
 .board-piece--ghost-blue { fill: #4b93ef; fill-opacity: 0.5; stroke: #125cbf; filter: url(#plexi-float); }
 .board-piece--ghost-white { fill: #fff; fill-opacity: 0.62; stroke: #5f6877; filter: url(#plexi-float); }
 .board-piece--ghost-invalid { fill: #ef9297; fill-opacity: 0.6; stroke: var(--red); filter: url(#plexi-float); }
+/* Reflet des dalles posées : la nappe de lumière de `plexi-sheen`, découpée par
+   le contour de la pièce. Elle ne porte ni contour ni filtre — la géométrie et
+   le relief sont déjà peints par la couche du dessous. */
+.board-piece-sheen { fill: url(#plexi-sheen); stroke: none; pointer-events: none; animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1); }
+/* Le ghost plane hors de la matière : il n'en accroche qu'un reflet affaibli. */
+.board-piece-sheen--ghost { opacity: 0.5; animation: none; }
 .board-winning-path { fill: none; stroke: #ffc400; stroke-linejoin: miter; stroke-width: 0.105; pointer-events: none; animation: winning-path 900ms ease-in-out infinite alternate; }
 
 /* Le coup de l'ordinateur pulse quelques secondes pour être repérable. Le

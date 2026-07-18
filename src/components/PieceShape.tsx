@@ -22,6 +22,7 @@ export function PieceShape({
   unavailable = false,
 }: PieceShapeProps) {
   const shown = orientation ?? getOrientation(shapeId!, rotation, flipped)
+  const outline = getCellsOutlinePath(shown.cells)
 
   return (
     <svg
@@ -35,8 +36,10 @@ export function PieceShape({
     >
       <path
         className={`piece-shape__silhouette${unavailable ? ' piece-shape__silhouette--unavailable' : ''}`}
-        d={getCellsOutlinePath(shown.cells)}
+        d={outline}
       />
+      {/* Un exemplaire déjà joué n'est qu'une empreinte vide : rien à napper. */}
+      {!unavailable && <path className="piece-shape__sheen" d={outline} />}
     </svg>
   )
 }
