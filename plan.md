@@ -11,6 +11,8 @@ Ce document décrit **ce que fait le jeu**, assez précisément pour le reconstr
 
 Règle officielle : <https://www.jeux-abstraits.fr/wp-content/uploads/2026/07/lynkx.pdf> · fiche éditeur : <https://blueorangegames.eu/fr/jeux/linkx/>. En cas de divergence, le présent document fait foi : ses dimensions et son inventaire ont été validés explicitement.
 
+**Convention de lecture.** Le jeu de plateau ne couvre pas tout ce qu'une application doit trancher. Partout où ce document arbitre un cas que la règle imprimée laisse ouvert, ou s'en écarte délibérément, il le signale par la mention **« Choix de cette version »**. Une réimplémentation est libre de trancher autrement sur ces points-là, et sur ceux-là seulement : tout le reste est la règle du jeu.
+
 ---
 
 ## Règles du jeu
@@ -113,13 +115,17 @@ Après une pose légale qui ne gagne pas, trois cas et trois seulement :
 2. l'adversaire n'a aucun coup légal mais le joueur qui vient de poser en a un → le tour de l'adversaire est **passé** et le même joueur rejoue ;
 3. aucun des deux n'a de coup légal → la partie est **terminée par blocage**.
 
-Le départage compare la **taille de la plus grande zone connectée** de chaque joueur, au sens du voisinage à huit cases, en nombre de cases. La plus grande l'emporte. À égalité parfaite, **match nul**. Les deux scores sont affichés.
+Le départage compare la **taille de la plus grande zone connectée** de chaque joueur, au sens du voisinage à huit cases, en nombre de cases. La plus grande l'emporte. Les deux scores sont affichés.
+
+**Choix de cette version** — la règle imprimée ne dit pas ce qu'il advient de deux plus grandes zones **exactement égales**. Ce cas est ici déclaré **match nul**, annoncé comme tel et distingué d'une victoire.
 
 Un joueur bloqué ne l'est pas définitivement : une pièce adverse posée ensuite peut lui créer un appui et lui rendre un coup. Le blocage ne doit donc jamais être mémorisé comme un état du joueur, seulement recalculé à partir du plateau et de la réserve.
 
 ### Premier joueur
 
-La couleur qui ouvre la partie est **tirée au sort** au lancement, et annoncée avant la partie. Le joueur ne la choisit pas. (La règle physique fait commencer le plus jeune ; le tirage au sort en tient lieu à l'écran.)
+La couleur qui ouvre la partie est **tirée au sort** au lancement, et annoncée avant la partie. Le joueur ne la choisit pas.
+
+**Choix de cette version** — la règle imprimée fait commencer le plus jeune joueur, ce qu'une application ne peut pas vérifier. Le tirage au sort en tient lieu. Une notation de partie (voir plus bas) peut en revanche imposer le premier joueur, puisqu'elle rejoue une partie déjà arbitrée.
 
 ---
 
@@ -228,7 +234,21 @@ Le cas d'une position **déjà gagnante** relève de l'histoire 4 : tant que la 
 
 **Réserves.** Chaque joueur voit ses sept formes, chacune représentée par **deux silhouettes** côte à côte. Un exemplaire disponible est plein et sélectionnable ; un exemplaire joué reste visible en **contour pointillé** et n'est plus sélectionnable. La séquence d'une forme est donc : deux pleines, puis une pleine et une pointillée, puis deux pointillées. Aucun nom de forme ni compteur numérique n'est affiché ; ces informations restent disponibles pour qui n'a pas accès à l'image. La réserve adverse est visible mais inerte.
 
-Les silhouettes de réserve gardent une orientation fixe, compacte et reconnaissable : elles ne tournent jamais avec la sélection. Le `S` y est présenté couché, pour ne pas creuser la hauteur de la réserve.
+**Orientation de présentation.** Les silhouettes de réserve gardent une orientation fixe : elles ne tournent ni ne se retournent jamais, quelle que soit la sélection en cours. Cette orientation compte, car sélectionner une pièce l'arme **exactement** dans la pose où sa silhouette est dessinée : c'est le point de départ des rotations, et donc la première chose que le joueur voit bouger.
+
+Les sept silhouettes de présentation, toutes non retournées, sont :
+
+```text
+MONO       DOMINO     BARRE      PETIT L
+X          XX         XXX        XX
+                                 X.
+
+S          T          GRAND L
+XX.        XXX        XXX
+.XX        .X.        X..
+```
+
+Le principe : chaque forme est présentée **couchée**, dans son orientation la plus large et la moins haute, pour ne pas creuser la hauteur de la réserve. C'est ce qui explique le `S` allongé plutôt que dressé sur trois lignes, et le `T` barre en haut. Ce principe fixe six formes sur sept : les quatre rotations du **petit L** tiennent toutes dans un carré de deux cases, sa présentation est donc un choix libre, que le schéma ci-dessus arrête. Ce qui importe alors n'est pas laquelle, mais qu'elle soit **stable** et que la sélection l'adopte.
 
 **Sélection et orientation.** Le premier choix d'un exemplaire disponible le sélectionne, dans exactement l'orientation où sa silhouette est dessinée dans la réserve. Choisir l'autre exemplaire de la même forme change la sélection sans rien tourner. Choisir à nouveau l'exemplaire déjà sélectionné le fait tourner d'un quart de tour. Une commande distincte retourne la pièce, disponible seulement pour le `S` et le grand `L`.
 
@@ -240,7 +260,22 @@ Cette conversion est **unique** et partagée par tous les modes de visée. La po
 
 **Aperçu.** Dès qu'une pièce est sélectionnée, un aperçu occupe exactement les cases où elle atterrirait, dans la couleur du joueur et en transparence. Il suit la visée et l'orientation.
 
-**Deux façons de viser, selon le support.** Là où le pointeur sait survoler, le plateau entier **et la bande qui le surmonte** deviennent la surface de visée : la pièce suit la colonne survolée et l'action la pose ; aucune rangée de commandes n'est alors affichée. La bande supérieure est indispensable, un plateau presque plein n'offrant plus de case libre à survoler. Là où le pointeur ne survole pas, neuf zones d'entrée apparaissent au-dessus du plateau, uniquement quand une pièce est sélectionnée, chacune réduite à une flèche sans numéro visible. Le jeu doit rester intégralement jouable au clavier : viser à gauche et à droite, tourner, retourner, poser.
+**Trois façons de viser, selon le support.** Là où le pointeur sait survoler, le plateau entier **et la bande qui le surmonte** deviennent la surface de visée : la pièce suit la colonne survolée et l'action la pose ; aucune rangée de commandes n'est alors affichée. La bande supérieure est indispensable, un plateau presque plein n'offrant plus de case libre à survoler. Là où le pointeur ne survole pas, neuf zones d'entrée apparaissent au-dessus du plateau, uniquement quand une pièce est sélectionnée, chacune réduite à une flèche sans numéro visible.
+
+**Le jeu se pilote intégralement au clavier**, et c'est une exigence d'accessibilité autant qu'une commodité : un joueur qui ne peut pas se servir d'un pointeur doit pouvoir jouer une partie entière. Six fonctions doivent être atteignables sans pointeur :
+
+| Fonction | Comportement attendu |
+| --- | --- |
+| Parcourir la réserve et choisir un exemplaire | atteint les mêmes exemplaires que le pointeur, dans l'ordre où ils sont affichés |
+| Déplacer la colonne visée | d'une colonne vers la gauche ou vers la droite, bornée aux deux bords ; à la première visée, part de la colonne centrale |
+| Tourner la pièce | d'un quart de tour, comme la commande visible |
+| Retourner la pièce | seulement pour le `S` et le grand `L` |
+| Poser | à la colonne visée, refus compris |
+| Consulter et fermer le résumé des règles, recommencer | atteignables comme n'importe quelle commande |
+
+Cette capacité doit survivre au cas où **aucune zone d'entrée n'est affichée à l'écran** — c'est-à-dire là où le pointeur sait survoler. Le clavier ne doit jamais dépendre de la présence des flèches de colonne.
+
+L'attribution des touches relève de l'implémentation. À titre indicatif, cette version retient : flèches gauche et droite pour viser, flèches haut et bas ou `R` pour tourner, `F` pour retourner, `Entrée` ou `Espace` pour poser. Il n'existe **pas** de commande d'annulation de la sélection : on change de pièce en en choisissant une autre, conformément au principe qu'une pièce posée ne se reprend pas.
 
 **Critères d'acceptation**
 
@@ -259,7 +294,9 @@ Cette conversion est **unique** et partagée par tous les modes de visée. La po
 - L'aperçu et la pose définitive désignent toujours les mêmes cases.
 - Viser une colonne avec une barre de trois couvre cette colonne et ses deux voisines ; viser un bord retient la pièce contre ce bord au lieu de la faire dépasser.
 - Sélectionner, tourner ou retourner ne déplace aucun autre élément à l'écran : le bord supérieur du plateau ne bouge pas.
-- Toute la partie est jouable au clavier seul, y compris là où les zones d'entrée ne sont pas affichées.
+- Une partie entière se joue au clavier seul, sans jamais toucher un pointeur, y compris là où les zones d'entrée de colonne ne sont pas affichées.
+- Les six fonctions du tableau ci-dessus sont chacune atteignables au clavier.
+- La première visée au clavier part de la colonne centrale ; viser au-delà d'un bord laisse la colonne sur ce bord.
 - Le nom de chaque forme et le nombre d'exemplaires restants sont accessibles sans voir l'image, bien qu'ils ne soient pas écrits à l'écran.
 
 ---
@@ -430,7 +467,7 @@ Il **ne colorie rien** : il glisse par-dessus les pièces, cerné d'un liseré s
 
 Le chemin est un vrai chemin dans la zone gagnante, reconstruit avec la **même** connectivité à huit voisins que la détection de victoire : il peut donc comporter des pas diagonaux. Quand plusieurs chemins existent, n'importe lequel convient, mais la reconstruction doit être déterministe. Le chemin horizontal est cherché en premier ; le vertical seulement s'il n'en existe aucun.
 
-**La célébration.** Pendant que le chemin se dessine, des gerbes d'étincelles éclatent au-dessus du plateau et s'éteignent en quelques secondes. Elles ne cachent jamais la position ni le panneau du vainqueur, ne captent aucun clic, et se terminent d'elles-mêmes au lieu de tourner en boucle.
+**La célébration.** Pendant que le chemin se dessine, des gerbes d'étincelles éclatent au-dessus du plateau. Elles partent en cascade plutôt que toutes ensemble, sont écartées du centre pour qu'à aucun instant la position finale ne soit illisible, et **l'ensemble s'éteint de lui-même en quatre secondes environ** — dernier bouquet compris. Elles ne cachent jamais la position ni le panneau du vainqueur, ne captent aucun clic, et ne tournent jamais en boucle.
 
 **Moins d'animations.** Pour qui a exprimé cette préférence au niveau du système, tout arrive d'emblée à son état final : le chemin est affiché entièrement tracé, et **les étincelles ne sont pas jouées du tout** — une célébration est précisément le genre d'effet à ne pas accélérer.
 
@@ -441,7 +478,7 @@ Le chemin est un vrai chemin dans la zone gagnante, reconstruit avec la **même*
 - Un chemin comportant des pas diagonaux est tracé en oblique et non en escalier.
 - Le tracé n'altère ni la couleur, ni la lisibilité des pièces qu'il traverse, bleues comme blanches.
 - Le tracé reste lisible sur les deux couleurs de pièces.
-- Les étincelles ne recouvrent ni le plateau ni le panneau de fin, et disparaissent seules.
+- Les étincelles ne recouvrent ni le plateau ni le panneau de fin, et disparaissent seules en quatre secondes environ, sans reprendre.
 - Sous préférence de mouvement réduit, le chemin s'affiche immédiatement dans son état final et aucune étincelle n'est jouée.
 - La reconstruction du chemin est déterministe : la même position gagnante donne toujours le même tracé.
 
@@ -455,7 +492,7 @@ Le chemin est un vrai chemin dans la zone gagnante, reconstruit avec la **même*
 
 **Les niveaux.** L'écran de départ de l'histoire 2 propose désormais deux modes : à deux joueurs sur le même écran, ou contre l'ordinateur. Avant de lancer une partie contre l'ordinateur, le joueur choisit son niveau : **débutant**, **confirmé** ou **expert**. Le débutant joue au coup par coup et laisse passer les menaces. Le confirmé, proposé par défaut, anticipe la réponse de son adversaire. L'expert pousse son analyse plus loin dès que le plateau se resserre. Le choix vaut pour toute la partie ; une nouvelle partie repart du niveau par défaut.
 
-Le joueur humain tient les bleus, l'ordinateur les blancs. Qui ouvre reste tiré au sort.
+**Choix de cette version** — le joueur humain tient toujours les bleus et l'ordinateur les blancs, ce qui fixe leur place à l'écran et évite un réglage de plus. Qui **ouvre** la partie reste tiré au sort : l'ordinateur joue donc le premier coup une fois sur deux.
 
 **Le budget de réflexion prime sur la profondeur.** Quel que soit le niveau, l'ordinateur annonce qu'il réfléchit et répond en une ou deux secondes : la partie ne s'interrompt jamais sur une attente, y compris sur téléphone. Le **pire cas est l'ouverture** : le plateau vide offre 95 coups légaux, et chaque niveau d'anticipation supplémentaire multiplie le travail par ce facteur de branchement. Un niveau fixe donc une profondeur **visée**, pas une promesse d'attente : tant que la position reste large, l'analyse s'arrête plus tôt ; elle va au bout quand le plateau se resserre, c'est-à-dire là où l'anticipation décide de la partie. Valeur de référence : au-delà de **24** coups légaux, l'anticipation est ramenée à un tour de réponse. Ce seuil se règle sur la machine cible, la contrainte tenable étant le temps, pas le nombre.
 
