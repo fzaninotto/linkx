@@ -36,6 +36,7 @@ export type Inventory = Record<ShapeId, 0 | 1 | 2>
 
 export type Selection = {
   shapeId: ShapeId
+  copy: 0 | 1
   rotation: Rotation
   flipped: boolean
 }
@@ -79,9 +80,8 @@ export type GameState = {
 
 export type GameAction =
   | { type: 'START_GAME'; firstPlayer: PlayerId }
-  | { type: 'SELECT_SHAPE'; player: PlayerId; shapeId: ShapeId }
+  | { type: 'SELECT_SHAPE'; player: PlayerId; shapeId: ShapeId; copy?: 0 | 1 }
   | { type: 'ROTATE_SELECTION' }
   | { type: 'FLIP_SELECTION' }
   | { type: 'DROP_SELECTED_SHAPE'; column: number }
   | { type: 'RESET_GAME' }
-

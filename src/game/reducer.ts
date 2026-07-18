@@ -99,7 +99,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       ) {
         return state
       }
-      if (state.selection?.shapeId === action.shapeId) {
+      const copy = action.copy ?? 0
+      if (
+        state.selection?.shapeId === action.shapeId &&
+        state.selection.copy === copy
+      ) {
         return {
           ...state,
           selection: {
@@ -111,7 +115,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       }
       return {
         ...state,
-        selection: { shapeId: action.shapeId, rotation: 0, flipped: false },
+        selection: { shapeId: action.shapeId, copy, rotation: 0, flipped: false },
         lastEvent: null,
       }
     }
@@ -159,7 +163,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         board,
         inventories,
         selection:
-          remaining > 0 ? state.selection : null,
+          remaining > 0 ? { ...state.selection, copy: 0 } : null,
         consecutivePasses: 0,
         lastEvent: { type: 'placed', player, shapeId },
         nextPieceId: state.nextPieceId + 1,

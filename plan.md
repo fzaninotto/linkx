@@ -550,6 +550,20 @@ Après une pose valide :
 
 Éviter une boucle infinie dans la résolution automatique. Au maximum deux joueurs sont examinés avant de conclure au blocage.
 
+### 7.8 Évaluation d'une grille pour une future IA
+
+Exposer `getConnectionScore(board, player)`, une fonction pure qui estime, pour un joueur, le nombre minimal de cases vides encore nécessaires pour relier une paire de bords opposés :
+
+- entrer dans une case de sa couleur coûte `0` ;
+- entrer dans une case vide coûte `1` ;
+- une case adverse est infranchissable ;
+- les déplacements utilisent les mêmes huit voisins que la détection de victoire ;
+- calculer séparément le plus court chemin gauche-droite et haut-bas, puis conserver le plus petit score.
+
+Une grille vide a donc un score de `9`, une grille déjà gagnante un score de `0`, et une grille dont les deux axes sont rendus impossibles par l'adversaire un score infini. Un score plus petit est meilleur.
+
+Cette première heuristique mesure des cases à conquérir et non des pièces ou des tours. Elle ignore volontairement les formes restantes, la gravité et les supports légaux. Un futur Minimax pourra notamment comparer les joueurs avec `score adverse - score du joueur` et compléter cette valeur par des critères de jouabilité.
+
 ## 8. Plan de tests
 
 ### 8.1 Outils
@@ -615,7 +629,15 @@ Scripts cibles :
 - victoire immédiate après le coup qui complète le chemin ;
 - reconstruction d'un chemin gagnant ordonné entre les deux bords, y compris pour un chemin uniquement diagonal.
 
-### 8.6 Tests d'interface
+### 8.6 Tests d'évaluation de grille
+
+- grille vide : score `9` pour les deux joueurs ;
+- liaison gagnante horizontale, verticale ou diagonale : score `0` ;
+- plusieurs zones séparées : somme minimale des cases vides nécessaires pour les raccorder aux bords ;
+- choix du meilleur axe lorsque les distances horizontale et verticale diffèrent ;
+- cases adverses infranchissables et score infini si aucun axe ne reste accessible.
+
+### 8.7 Tests d'interface
 
 - seule la réserve active est interactive ;
 - un premier clic sélectionne ;

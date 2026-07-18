@@ -9,7 +9,7 @@ type Component = {
   touchesBottom: boolean
 }
 
-const NEIGHBORS = [-1, 0, 1].flatMap((dy) =>
+export const CONNECTION_NEIGHBORS = [-1, 0, 1].flatMap((dy) =>
   [-1, 0, 1]
     .filter((dx) => dx !== 0 || dy !== 0)
     .map((dx) => ({ x: dx, y: dy })),
@@ -31,7 +31,7 @@ export function getComponents(board: Board, player: PlayerId): Component[] {
       for (let index = 0; index < queue.length; index += 1) {
         const point = queue[index]
         cells.push(point)
-        for (const offset of NEIGHBORS) {
+        for (const offset of CONNECTION_NEIGHBORS) {
           const next = { x: point.x + offset.x, y: point.y + offset.y }
           const nextKey = `${next.x},${next.y}`
           if (
@@ -92,7 +92,7 @@ function findPathBetweenEdges(
       return path.reverse()
     }
 
-    for (const offset of NEIGHBORS) {
+    for (const offset of CONNECTION_NEIGHBORS) {
       const next = { x: point.x + offset.x, y: point.y + offset.y }
       const key = `${next.x},${next.y}`
       if (
