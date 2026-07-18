@@ -317,7 +317,30 @@
 .board-piece-sheen { fill: url(#plexi-sheen); stroke: none; pointer-events: none; animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1); }
 /* Le ghost plane hors de la matière : il n'en accroche qu'un reflet affaibli. */
 .board-piece-sheen--ghost { opacity: 0.5; animation: none; }
-.board-winning-path { fill: none; stroke: #ffc400; stroke-linejoin: miter; stroke-width: 0.105; pointer-events: none; animation: winning-path 900ms ease-in-out infinite alternate; }
+/* Chemin gagnant : un trait continu qui relie les deux bords en suivant la
+   connexion, et non un pavage des cases qui empâtait la position finale. Il est
+   doublé — un liseré sombre, puis un cœur doré — pour rester lisible sur les
+   dalles bleues comme sur les blanches. Toutes les longueurs sont ici en unités
+   de case : cette couche dessine une case par unité utilisateur.
+
+   `pathLength="100"` ramène la longueur du tracé à 100 quel que soit son
+   parcours : le même couple dasharray/dashoffset déroule donc n'importe quelle
+   connexion, diagonales et détours compris. L'état de repos est le chemin
+   tracé, et l'animation ne fait que partir de l'état vide : le retirer suffit à
+   afficher immédiatement le résultat final. */
+.board-trail path { fill: none; stroke-linecap: butt; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 0; pointer-events: none; animation: trail-draw 1200ms cubic-bezier(.4,.05,.2,1) 160ms backwards; }
+.board-trail__halo { stroke: #241a02; stroke-opacity: 0.62; stroke-width: 0.24; }
+.board-trail__line { stroke: #ffc400; stroke-width: 0.115; }
+
+/* Feu d'artifice de victoire. Il vit dans le cadre du plateau, sans capter le
+   pointeur ni déborder sur le panneau de fin, et s'éteint de lui-même : chaque
+   étincelle ne joue qu'une fois et le composant se démonte après le bouquet.
+   Contrairement à la couche des pièces, ce calque est en HTML : ses longueurs
+   sont donc bien des pixels d'écran. */
+.board-fireworks { --spark-reach: clamp(46px, 13vw, 96px); --spark-size: 7px; position: absolute; z-index: 3; inset: 0; overflow: hidden; pointer-events: none; }
+.fireworks-burst { position: absolute; }
+.fireworks-flash { position: absolute; width: 14px; height: 14px; border: 2px solid rgb(255 226 150 / 85%); border-radius: 50%; margin: -7px; opacity: 0; animation: firework-flash 620ms ease-out both; }
+.fireworks-spark { position: absolute; width: var(--spark-size); height: var(--spark-size); margin: calc(var(--spark-size) / -2); border-radius: 50%; background: var(--spark-color); box-shadow: 0 0 6px rgb(255 210 100 / 55%); opacity: 0; animation: firework-spark 1500ms cubic-bezier(.12,.72,.3,1) both; }
 
 /* Le coup de l'ordinateur pulse quelques secondes pour être repérable. Le
    pulse porte sur le contour seul : une liste de filtres contenant un `url()`
@@ -336,7 +359,22 @@
   from { stroke: #d59b00; stroke-width: var(--piece-outline); }
   to { stroke: #ffd54a; stroke-width: 0.13; }
 }
-@keyframes winning-path { to { stroke: #ffe07a; stroke-width: 0.14; } }
+/* Le tracé se parcourt depuis le bord d'où part la connexion : `getWinningTrail`
+   oriente le chemin, gauche → droite ou bas → haut, et le déroulé suit. */
+@keyframes trail-draw { from { stroke-dashoffset: 100; } }
+@keyframes firework-flash {
+  0% { opacity: 0; transform: scale(0.2); }
+  22% { opacity: 0.9; }
+  100% { opacity: 0; transform: scale(3.4); }
+}
+/* La retombée : l'étincelle part vite, puis un supplément vertical constant lui
+   donne le poids de la gravité avant l'extinction. */
+@keyframes firework-spark {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.35); }
+  12% { opacity: 1; transform: translate(calc(var(--spark-dx) * var(--spark-reach) * 0.3), calc(var(--spark-dy) * var(--spark-reach) * 0.3)) scale(1); }
+  70% { opacity: 0.8; }
+  100% { opacity: 0; transform: translate(calc(var(--spark-dx) * var(--spark-reach)), calc(var(--spark-dy) * var(--spark-reach) + 26px)) scale(0.55); }
+}
 
 /* Dialogs */
 .modal-backdrop { --safe-gutter: 1.5rem; position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; background: rgb(20 29 46 / 66%); backdrop-filter: blur(3px); }
@@ -560,4 +598,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  /* Une célébration est exactement le genre d'effet qui déclenche des troubles
+     vestibulaires : le feu d'artifice ne doit pas être joué en accéléré, il ne
+     doit pas être joué du tout. Le chemin gagnant, lui, s'affiche déjà tracé —
+     l'animation ne portait que sur son déroulé, et son retrait laisse l'état
+     final, sans le retard d'entrée que la règle ci-dessus ne neutralise pas. */
+  .board-fireworks { display: none; }
+  .board-trail path { animation: none; }
 }

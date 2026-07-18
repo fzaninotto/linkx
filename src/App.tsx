@@ -290,6 +290,7 @@ function App() {
             ghost={state.phase === 'playing' ? ghost : null}
             ghostPlayer={state.activePlayer}
             winningPath={winningPath}
+            celebrate={state.phase === 'finished' && Boolean(state.result?.winner)}
             glowPieceId={glowPieceId}
             aiming={aiming && pointerHasHover}
             onPointColumn={setPointedColumn}

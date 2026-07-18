@@ -1,6 +1,8 @@
 import { BOARD_SIZE } from '../game/types'
 import type { Board as BoardType, DropResult, PlayerId, Point } from '../game/types'
+import { Fireworks } from './Fireworks'
 import { getCellsOutlinePath } from './pieceGeometry'
+import { getWinningTrail } from './winningTrail'
 import { PlexiDefs } from './PlexiDefs'
 
 type BoardProps = {
@@ -8,6 +10,8 @@ type BoardProps = {
   ghost: DropResult | null
   ghostPlayer: PlayerId
   winningPath?: Point[]
+  /** Lance le feu d'artifice de fin, une seule fois, à l'annonce du vainqueur. */
+  celebrate?: boolean
   /** Pièce à faire briller, le temps que le joueur repère le coup de l'ordi. */
   glowPieceId?: string | null
   /** Visée au pointeur : la colonne survolée porte la pièce, le clic la pose. */
@@ -49,6 +53,7 @@ export function Board({
   ghost,
   ghostPlayer,
   winningPath = [],
+  celebrate = false,
   glowPieceId = null,
   aiming = false,
   onPointColumn,
@@ -62,6 +67,7 @@ export function Board({
   const ghostCells = new Set(ghostPoints.map(({ x, y }) => `${x},${y}`))
   const ghostOutline = getCellsOutlinePath(ghostPoints)
   const pieces = boardPieces(board)
+  const trail = getWinningTrail(winningPath)
 
   return (
     <div className="board-frame">
@@ -110,11 +116,16 @@ export function Board({
               />
             </>
           )}
-          {winningPath.length > 0 && (
-            <path
-              className="board-winning-path"
-              d={getCellsOutlinePath(winningPath)}
-            />
+          {/* La connexion est tracée comme un trajet d'un bord à l'autre, pas
+              comme un pavage des cases : le liseré sombre passe devant les
+              dalles blanches, le cœur doré devant les bleues, et les deux se
+              dessinent d'un même geste grâce à `pathLength`, qui normalise la
+              longueur du tracé quels que soient ses détours. */}
+          {trail && (
+            <g className={`board-trail board-trail--${trail.axis}`}>
+              <path className="board-trail__halo" d={trail.d} pathLength={100} />
+              <path className="board-trail__line" d={trail.d} pathLength={100} />
+            </g>
           )}
         </svg>
         {board.map((row, y) => (
@@ -148,6 +159,9 @@ export function Board({
           </div>
         ))}
       </div>
+      {/* Posé dans le cadre, donc découpé par lui : la célébration ne peut pas
+          déborder sur le panneau de fin, qui reste au-dessus du plateau. */}
+      {celebrate && <Fireworks />}
     </div>
   )
 }
