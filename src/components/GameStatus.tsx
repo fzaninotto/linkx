@@ -31,12 +31,22 @@ export function GameStatus({
       className={`game-status game-status--${activePlayer}${thinking ? ' game-status--thinking' : ''}`}
       aria-live="polite"
     >
-      <span className="turn-arrow" aria-hidden="true">
+      {/* Deux flèches, une seule visible : la mise en page décide laquelle. Sur
+          trois colonnes la réserve active est sur un côté, en une colonne elle
+          est empilée sous le plateau. */}
+      <span className="turn-arrow turn-arrow--aside" aria-hidden="true">
         {activePlayer === 'blue' ? '←' : '→'}
       </span>
+      <span className="turn-arrow turn-arrow--below" aria-hidden="true">
+        ↓
+      </span>
       {/* Le changement de joueur vit dans le texte annoncé, pas dans un
-          aria-label : muter un aria-label ne déclenche pas d'annonce. */}
-      <p className="visually-hidden">Tour des {NAMES[activePlayer]}</p>
+          aria-label : muter un aria-label ne déclenche pas d'annonce. La
+          permutation des réserves étant purement visuelle, l'annonce dit aussi
+          laquelle des deux devient jouable. */}
+      <p className="visually-hidden">
+        Tour des {NAMES[activePlayer]} : leur réserve devient la réserve active.
+      </p>
       {message && <p>{message}</p>}
     </div>
   )

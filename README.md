@@ -102,6 +102,19 @@ Les tests vivent à côté de leur module, en `*.test.ts` / `*.test.tsx`.
 - `simulation.ts` fournit la position pure utilisée par `minimax.ts` ; elle rejoue les mêmes fonctions de domaine que le reducer, sans les dupliquer.
 - L'état de survol, les délais et les animations restent dans l'UI tant qu'ils n'affectent pas les règles.
 
+### Ordre des réserves et mise en page
+
+`App.tsx` rend le plateau d'abord, puis les deux réserves **dans l'ordre du tour**, la réserve du joueur actif en tête. L'ordre du DOM est donc toujours l'ordre visuel, y compris pour un lecteur d'écran ou une tabulation.
+
+- Sur trois colonnes, cet ordre ne doit rien décider : `App.css` pose chaque réserve sur la colonne de sa couleur avec `grid-area`, la bleue à gauche comme l'annonce la flèche du bandeau. Ne pas revenir à un placement automatique, il suivrait le tour.
+- En une seule colonne, la permutation des deux réserves est le signal de tour principal. Elle n'est jamais le seul : le bandeau garde sa flèche et sa teinte, et sa région `aria-live` annonce le changement. Une permutation muette serait invisible pour un lecteur d'écran.
+- Les sélecteurs `.play-area + .piece-tray` et `.piece-tray + .piece-tray` désignent respectivement la réserve active et l'adverse. Ils tiennent de l'ordre du DOM, donc aucune classe d'état n'est à câbler côté React.
+- La réserve empilée est une grille de sept colonnes — un groupe de forme par colonne, les deux exemplaires empilés. `--piece-cell` s'y déduit de la largeur de colonne : la silhouette rétrécit, la cible tactile reste à 44px. Ne pas réintroduire de défilement horizontal dans la réserve.
+
+### Zone sûre iOS
+
+`index.html` déclare `viewport-fit=cover` et `apple-mobile-web-app-status-bar-style: black-translucent`. Les deux vont ensemble : sans les retraits, la barre d'état translucide recouvrirait le bandeau. `App.css` reprend `env(safe-area-inset-*)` sur le bandeau, la grille de jeu, la dernière réserve et les écrans plein écran. Repasser la barre d'état en `default` sans retirer ces retraits laisserait une bande vide en haut.
+
 ## Modèle de domaine
 
 `src/game/types.ts` fait foi ; ne pas dupliquer ces définitions ailleurs.

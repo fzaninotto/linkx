@@ -51,14 +51,28 @@
   text-transform: uppercase;
 }
 
+/* Les écrans qui occupent tout l'affichage doivent tenir compte de l'encoche et
+   de la barre de gestes : leur marge intérieure ne descend jamais sous le
+   retrait de zone sûre du bord correspondant. */
+.setup-screen,
+.modal-backdrop {
+  padding:
+    max(var(--safe-gutter), env(safe-area-inset-top, 0px))
+    max(var(--safe-gutter), env(safe-area-inset-right, 0px))
+    max(var(--safe-gutter), env(safe-area-inset-bottom, 0px))
+    max(var(--safe-gutter), env(safe-area-inset-left, 0px));
+}
+
 /* Setup */
 .setup-screen {
+  --safe-gutter: 2rem;
+
   position: relative;
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
   overflow: hidden;
-  padding: 2rem;
   background:
     linear-gradient(90deg, transparent 49.9%, rgb(23 33 58 / 5%) 50%, transparent 50.1%),
     linear-gradient(0deg, transparent 49.9%, rgb(23 33 58 / 5%) 50%, transparent 50.1%),
@@ -133,13 +147,24 @@
 .setup-card > .text-button { margin-top: 0.75rem; font-size: 0.86rem; }
 
 /* Game chrome */
-.game-shell { min-height: 100vh; background: var(--paper); }
+.game-shell {
+  --topbar-height: calc(58px + env(safe-area-inset-top, 0px));
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--paper);
+}
+
+/* En plein écran iOS la page passe sous la barre d'état : c'est le bandeau qui
+   doit couvrir l'encoche, donc son retrait est un padding et non une marge, et
+   sa hauteur minimale l'englobe pour ne pas écraser son contenu. */
 .topbar {
   display: flex;
-  min-height: 58px;
+  min-height: calc(58px + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: space-between;
-  padding: 0 2.5rem;
+  padding:
+    env(safe-area-inset-top, 0px) max(2.5rem, env(safe-area-inset-right, 0px)) 0
+    max(2.5rem, env(safe-area-inset-left, 0px));
   border-bottom: 1px solid #cfd3da;
   background: #f3f2ee;
 }
@@ -151,10 +176,19 @@
 .game-layout {
   display: grid;
   width: min(100%, 1410px);
-  min-height: calc(100vh - 58px);
+  min-height: calc(100vh - var(--topbar-height));
+  min-height: calc(100dvh - var(--topbar-height));
   margin: 0 auto;
   grid-template-columns: 330px minmax(500px, 1fr) 330px;
 }
+
+/* Les réserves sont rendues dans l'ordre du tour, la réserve active en tête.
+   Sur trois colonnes cet ordre ne doit rien décider : chaque réserve est posée
+   sur la colonne de sa couleur, la bleue à gauche comme l'annonce la flèche du
+   bandeau. Le passage en une colonne rend la place à l'ordre du DOM. */
+.game-layout > .piece-tray--blue { grid-area: 1 / 1; }
+.game-layout > .play-area { grid-area: 1 / 2; }
+.game-layout > .piece-tray--white { grid-area: 1 / 3; }
 
 /* Trays */
 .piece-tray { padding: 1.4rem 0.8rem; border-color: #d2d5db; background: #efefec; }
@@ -206,13 +240,19 @@
 .piece-shape .piece-shape__silhouette--unavailable { fill: none; stroke-dasharray: 0.22 0.16; filter: none; }
 
 /* Central play area */
-.play-area { display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 1.1rem 1.4rem 2rem; background: #f8f7f3; }
+/* La bande de visée et le vide qui la remplace hors sélection dérivent d'une
+   seule hauteur : le bord supérieur du plateau ne peut donc pas se déplacer
+   entre les deux états, à aucune largeur. */
+.play-area { --drop-zone-height: 30px; display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 1.1rem 1.4rem 2rem; background: #f8f7f3; }
 .play-banner { display: flex; width: min(100%, 520px); height: 68px; flex: 0 0 68px; }
 .game-status { display: flex; width: 100%; height: 100%; align-items: center; gap: 1rem; padding: 0.45rem 1rem; background: #eef3fb; }
 .game-status--blue { justify-content: flex-start; }
 .game-status--white { justify-content: flex-end; background: #eeece6; }
 .turn-arrow { color: var(--blue); font-size: 2rem; font-weight: 900; line-height: 1; }
 .game-status--white .turn-arrow { color: #5c6575; order: 2; }
+/* Trois colonnes : la flèche désigne un côté. La variante « vers le bas » ne
+   sert qu'à la disposition empilée. */
+.turn-arrow--below { display: none; }
 .game-status p { margin: 0 auto; color: #59657a; font-size: 0.78rem; line-height: 1.4; text-align: center; }
 .game-status--thinking p { color: var(--ink); font-weight: 700; animation: thinking-pulse 1s ease-in-out infinite alternate; }
 
@@ -227,14 +267,14 @@
 .control-button:disabled { cursor: not-allowed; opacity: 0.38; }
 
 .drop-zones { display: grid; width: min(100%, 520px); grid-template-columns: repeat(9, 1fr); gap: 3px; padding: 0 12px 6px; }
-.drop-zones-spacer { width: min(100%, 520px); height: 36px; }
+.drop-zones-spacer { width: min(100%, 520px); height: calc(var(--drop-zone-height) + 6px); }
 /* Bande de visée sans flèches : elle prolonge la grille vers le haut, sans rien
    afficher ni réserver de survol propre. */
 .drop-zones--silent .drop-zone,
 .drop-zones--silent .drop-zone:hover:not(:disabled),
 .drop-zones--silent .drop-zone.is-hovered,
 .drop-zones--silent .drop-zone.is-invalid { border-color: transparent; background: transparent; }
-.drop-zone { display: flex; height: 30px; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 4px 4px 0 0; background: transparent; color: #8790a0; cursor: pointer; line-height: 1; }
+.drop-zone { display: flex; height: var(--drop-zone-height); align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 4px 4px 0 0; background: transparent; color: #8790a0; cursor: pointer; line-height: 1; }
 .drop-zone .drop-arrow { color: var(--blue); font-size: 1rem; font-weight: 800; transition: transform 120ms ease; }
 .drop-zone:hover:not(:disabled), .drop-zone.is-hovered { border-color: #b7cae8; background: #e7effa; color: #2d5897; }
 .drop-zone:hover:not(:disabled) .drop-arrow, .drop-zone.is-hovered .drop-arrow { transform: translateY(3px); }
@@ -277,7 +317,7 @@
 @keyframes winning-path { to { stroke: #ffe07a; stroke-width: 0.14; } }
 
 /* Dialogs */
-.modal-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 1.5rem; background: rgb(20 29 46 / 66%); backdrop-filter: blur(3px); }
+.modal-backdrop { --safe-gutter: 1.5rem; position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; background: rgb(20 29 46 / 66%); backdrop-filter: blur(3px); }
 .game-over-panel { display: flex; width: 100%; height: 100%; align-items: center; gap: 0.8rem; padding: 0.65rem 0.8rem; border: 1px solid #b8c9e1; border-left: 4px solid var(--blue); background: #eef3fb; }
 .game-over-panel--white { border-color: #c8c9c5; border-left-color: #626b79; background: #f0eee8; }
 .game-over-panel--draw { border-color: #c8cbd1; border-left-color: #747d8c; background: #f0f1f2; }
@@ -307,24 +347,108 @@
    en une colonne doit intervenir avant 1160px, sinon la mise en page déborde
    horizontalement sur les largeurs intermédiaires. */
 @media (max-width: 1199px) {
-  .game-layout { grid-template-columns: minmax(0, 1fr); }
-  .piece-tray { min-width: 0; padding: 1rem 1.2rem; border: 0; border-bottom: 1px solid #d2d5db; }
-  .piece-tray--white { border-top: 1px solid #d2d5db; border-bottom: 0; }
-  .piece-list { width: 100%; min-width: 0; grid-template-columns: repeat(7, 300px); overflow-x: auto; padding-bottom: 0.35rem; }
-  .piece-row { min-width: 300px; }
+  /* Une seule colonne : le plateau d'abord, puis les deux réserves dans l'ordre
+     où React les rend, la réserve active en tête. L'ordre visuel est donc
+     exactement l'ordre du DOM, et la permutation se lit aussi à la tabulation. */
+  .game-layout {
+    grid-template-columns: minmax(0, 1fr);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .game-layout > .piece-tray--blue,
+  .game-layout > .play-area,
+  .game-layout > .piece-tray--white { grid-area: auto; }
+
+  .turn-arrow--aside { display: none; }
+  .turn-arrow--below { display: inline; }
+
   .play-area { padding-top: 1rem; }
+
+  /* Le trait sépare la réserve de ce qui la précède : il reste juste quel que
+     soit celui des deux joueurs qui passe en premier. */
+  .piece-tray { min-width: 0; padding: 0.6rem 2px; border: 0; border-top: 1px solid #d2d5db; }
+  .piece-tray:last-child { padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px)); }
+
+  /* Sept groupes en colonnes, les deux exemplaires empilés : c'est la seule
+     disposition qui tienne en deux rangées sans défilement dès 320px, et celle
+     qui laisse la plus large zone tactile à chaque silhouette. */
+  .piece-list {
+    width: min(100%, 560px);
+    min-width: 0;
+    margin-inline: auto;
+    gap: 4px 1px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  /* `stretch` est indispensable : c'est lui qui donne au bouton toute la cellule
+     de 44px, alors que la silhouette qu'il contient est bien plus petite. */
+  .piece-row {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    gap: 2px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(44px, 1fr));
+    place-items: stretch;
+  }
+
+  .piece-button { min-width: 0; padding: 2px; }
+
+  /* La silhouette est dessinée plus petite que son bouton : la case se déduit de
+     la colonne disponible — sept colonnes, trois cases de large au maximum —
+     tandis que la zone tactile garde ses 44px. Le retrait de 26px couvre le
+     padding de la réserve, les gouttières et une barre de défilement de bureau,
+     pour qu'aucune largeur ne puisse déborder. */
+  .piece-shape--compact { --piece-cell: min(24px, (100vw - 26px) / 21 - 1.4px); }
+
+  /* La réserve adverse reste lisible mais s'efface : sans cela deux réserves de
+     même gabarit permutent sans qu'on sache laquelle vient de prendre la main.
+     Le premier enfant après le plateau est, par construction, la réserve
+     active. */
+  .game-layout > .piece-tray + .piece-tray { opacity: 0.6; }
+  .game-layout > .play-area + .piece-tray { animation: tray-takes-turn 200ms ease-out; }
+}
+
+/* Prise de tour : la réserve qui vient de passer sous le plateau se pose au lieu
+   d'apparaître d'un coup. Le mouvement est court et sans rebond ; il tombe de
+   lui-même sous `prefers-reduced-motion`. */
+@keyframes tray-takes-turn {
+  from { opacity: 0.2; transform: translateY(-8px); }
 }
 
 @media (max-width: 620px) {
-  .topbar { padding: 0 0.8rem; }
+  .topbar {
+    padding:
+      env(safe-area-inset-top, 0px) max(0.8rem, env(safe-area-inset-right, 0px)) 0
+      max(0.8rem, env(safe-area-inset-left, 0px));
+  }
   .topbar-actions { gap: 0.25rem; }
   .topbar-actions .text-button { display: none; }
-  .play-area { padding: 0.7rem 0.55rem 1.5rem; }
+  /* Une bande de visée au doigt : 44px de haut, et le vide qui la remplace suit
+     automatiquement. */
+  .play-area { --drop-zone-height: 44px; padding: 0.7rem 0.55rem 1.5rem; }
+  /* Le bandeau est plus haut qu'au bureau : sur une seule colonne le panneau de
+     fin dispose de bien moins de largeur, donc son titre et sa raison passent à
+     la ligne. Il conserve sa hauteur fixe, celle de l'état en cours de partie,
+     pour que le bord haut du plateau ne bouge pas à la victoire. */
+  .play-banner { height: 88px; flex-basis: 88px; }
   .game-status { min-height: 54px; gap: 0.5rem; padding: 0.55rem 0.75rem; }
   .game-status p { max-width: 55%; font-size: 0.68rem; }
-  .selection-stage { height: 150px; flex-basis: 150px; }
+  /* L'aperçu central s'aligne sur la case jouée plutôt que sur les 46px du
+     bureau : sur un téléphone la case du plateau est plus petite, et la zone de
+     sélection cesse de manger la hauteur du plateau. Elle reste de hauteur fixe
+     à largeur donnée, donc le bord haut du plateau ne bouge toujours pas. */
+  .selection-stage {
+    --preview-cell: min(46px, (100vw - 46px) / 9);
+
+    height: calc(var(--preview-cell) * 3 + 12px);
+    flex-basis: calc(var(--preview-cell) * 3 + 12px);
+  }
+  .selected-piece-preview { width: calc(var(--preview-cell) * 3); height: calc(var(--preview-cell) * 3); }
+  .selected-piece-preview .piece-shape { --piece-cell: var(--preview-cell); }
+  .control-button { width: 44px; height: 44px; }
   .drop-zones { padding-inline: 8px; }
-  .drop-zone { height: 34px; }
   .board-frame { padding: 8px; }
   .board { --board-padding: 3px; border-width: 3px; }
   /* Cases d'environ trente pixels : le voile brillant et le filet spéculaire
@@ -337,12 +461,22 @@
   .board-piece--ghost-white,
   .board-piece--ghost-invalid { filter: url(#plexi-float); }
   .piece-shape .piece-shape__silhouette--unavailable { filter: none; }
-  .setup-screen { padding: 0.8rem; }
+  .setup-screen,
+  .modal-backdrop { --safe-gutter: 0.8rem; }
   .setup-card { padding: 2rem 1.1rem 1.5rem; }
   .setup-intro { font-size: 0.88rem; }
-  .modal-backdrop { padding: 0.8rem; }
-  .game-over-panel { flex-wrap: wrap; }
-  .game-over-panel .primary-button { margin-left: auto; }
+  /* Une seule rangée, resserrée : un retour à la ligne déborderait du bandeau,
+     dont la hauteur est fixe par construction. La médaille est décorative et
+     part la première quand la place manque. */
+  .game-over-panel { gap: 0.5rem; padding: 0.5rem 0.6rem; }
+  .winner-medal { display: none; }
+  .game-over-copy { min-width: 0; }
+  .game-over-panel h2 { font-size: 0.86rem; line-height: 1.2; }
+  .game-over-panel p { font-size: 0.6rem; }
+  .score-grid { gap: 0.25rem; }
+  .score-grid span { min-width: 40px; padding: 0.2rem 0.25rem; font-size: 0.52rem; }
+  .score-grid strong { font-size: 0.78rem; }
+  .game-over-panel .primary-button { min-height: 34px; padding: 0.35rem 0.6rem; font-size: 0.66rem; }
   .rules-panel { padding: 2rem 1.25rem 1.4rem; }
 }
 

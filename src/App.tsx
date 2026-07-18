@@ -17,7 +17,7 @@ import { createGameStateFromSearch } from './game/queryState'
 import { chooseMinimaxMove } from './game/minimax'
 import { usePointerHasHover } from './components/usePointerHasHover'
 import { BOARD_SIZE, PLAYER_IDS } from './game/types'
-import type { GameMode, InvalidDropReason } from './game/types'
+import type { GameMode, InvalidDropReason, PlayerId } from './game/types'
 
 const DROP_MESSAGES: Record<InvalidDropReason, string> = {
   'horizontal-bounds': 'Cette orientation dépasse du plateau.',
@@ -180,6 +180,12 @@ function App() {
     : null
   const canFlip =
     state.selection && FLIPPABLE_SHAPES.includes(state.selection.shapeId)
+  // La réserve du joueur actif est rendue en premier. En une seule colonne elle
+  // se place donc juste sous le plateau et l'alternance des deux réserves
+  // signale le changement de tour ; l'ordre du DOM reste celui qu'on lit à
+  // l'écran. Sur bureau, `grid-column` les repose à gauche et à droite.
+  const trayOrder: PlayerId[] =
+    state.activePlayer === 'white' ? ['white', 'blue'] : ['blue', 'white']
 
   return (
     <main className="game-shell">
@@ -194,15 +200,6 @@ function App() {
       </header>
 
       <div className="game-layout">
-        <PieceTray
-          player="blue"
-          inventory={state.inventories.blue}
-          playedCopies={state.playedCopies.blue}
-          active={state.phase === 'playing' && state.activePlayer === 'blue'}
-          selection={state.activePlayer === 'blue' ? state.selection : null}
-          onSelect={(shapeId, copy) => dispatch({ type: 'SELECT_SHAPE', player: 'blue', shapeId, copy })}
-        />
-
         <section className="play-area">
           <div className="play-banner">
             {state.phase === 'finished' && state.result ? (
@@ -295,14 +292,17 @@ function App() {
           />
         </section>
 
-        <PieceTray
-          player="white"
-          inventory={state.inventories.white}
-          playedCopies={state.playedCopies.white}
-          active={state.phase === 'playing' && state.activePlayer === 'white' && !aiTurn}
-          selection={state.activePlayer === 'white' ? state.selection : null}
-          onSelect={(shapeId, copy) => dispatch({ type: 'SELECT_SHAPE', player: 'white', shapeId, copy })}
-        />
+        {trayOrder.map((player) => (
+          <PieceTray
+            key={player}
+            player={player}
+            inventory={state.inventories[player]}
+            playedCopies={state.playedCopies[player]}
+            active={state.phase === 'playing' && state.activePlayer === player && !aiTurn}
+            selection={state.activePlayer === player ? state.selection : null}
+            onSelect={(shapeId, copy) => dispatch({ type: 'SELECT_SHAPE', player, shapeId, copy })}
+          />
+        ))}
       </div>
 
       {rulesOpen && <RulesPanel onClose={() => setRulesOpen(false)} />}
