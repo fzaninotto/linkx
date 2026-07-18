@@ -1,655 +1,539 @@
-# Plan d'implémentation de Linkx
+# Linkx — spécification produit
 
-## 1. Objet du document
+## Objet et portée
 
-Ce document doit permettre à un agent reprenant le projet sans historique de conversation de retrouver le comportement attendu d'une SPA React où deux joueurs jouent à Linkx sur le même écran, ou où un joueur affronte l'ordinateur.
+Ce document décrit **ce que fait le jeu**, assez précisément pour le reconstruire depuis zéro sans accès à une implémentation existante. Il ne suppose ni langage, ni bibliothèque, ni support : la même spécification doit permettre d'écrire le jeu en Java, en Rust, dans un terminal ou dans une application native.
 
-Il contient :
+- Ce qui relève de la pile technique, de l'arborescence des fichiers et des conventions de code vit dans `README.md`, pas ici.
+- Le document est découpé en **histoires utilisateur** ordonnées. Chacune est livrable et vérifiable seule, s'appuie uniquement sur les précédentes, et n'exige aucune des suivantes.
+- Certaines histoires sont **liées à un support** : lien partageable, écran tactile, installation sur téléphone. Elles sont signalées comme telles. Une réimplémentation en terminal les ignore sans que le jeu cesse d'être Linkx.
+- Les sections « Règles du jeu » et « Notation d'une partie » sont transverses : plusieurs histoires y renvoient, elles ne sont énoncées qu'une fois.
 
-- les règles validées avec le propriétaire du projet ;
-- la topologie exacte des pièces ;
-- les décisions d'UX déjà demandées ;
-- les algorithmes de pose, de passe et de victoire ;
-- le plan de tests et les critères d'acceptation ;
-- les décisions UX définitivement appliquées.
+Règle officielle : <https://www.jeux-abstraits.fr/wp-content/uploads/2026/07/lynkx.pdf> · fiche éditeur : <https://blueorangegames.eu/fr/jeux/linkx/>. En cas de divergence, le présent document fait foi : ses dimensions et son inventaire ont été validés explicitement.
 
-Il ne contient **pas** la spécification technique : stack, commandes, arborescence, modèle de domaine et conventions de code vivent dans `README.md`, qui sert aussi de `CLAUDE.md`. Ne pas dupliquer l'un dans l'autre.
+---
 
-Ce fichier est la spécification de référence du comportement du jeu actuel. Les obligations formulées ici priment sur les anciennes recommandations.
+## Règles du jeu
 
-## 2. Sources et arbitrage des règles
+Source de vérité du domaine. Les histoires y renvoient au lieu de la recopier.
 
-Règle française fournie par l'utilisateur :
+### Plateau et repères
 
-- https://www.jeux-abstraits.fr/wp-content/uploads/2026/07/lynkx.pdf
+- Une grille carrée de **9 colonnes sur 9 lignes**, soit 81 cases, tenue verticalement.
+- Repère employé dans tout le document : la colonne `0` est à gauche, la colonne `8` à droite ; la ligne `0` est en haut, la ligne `8` est **le fond**, celle où les pièces s'accumulent.
+- Deux joueurs, désignés par une couleur : **bleu** et **blanc**.
 
-Fiche officielle :
+### Réserve de chaque joueur
 
-- https://blueorangegames.eu/fr/jeux/linkx/
+Sept formes, **deux exemplaires de chacune** par joueur, soit 14 pièces et 42 cases par joueur. Les deux exemplaires d'une forme sont interchangeables au jeu ; ils ne se distinguent que dans l'affichage de la réserve.
 
-Les dimensions et l'inventaire ci-dessous ont été corrigés et explicitement confirmés par l'utilisateur. Ils priment sur toute déduction faite à partir des photos ou des fiches commerciales.
-
-## 3. Règles validées
-
-### 3.1 Plateau et joueurs
-
-- Deux joueurs : bleu et blanc.
-- Une grille verticale de **9 colonnes par 9 lignes**, soit 81 cases.
-- Chaque joueur possède 14 pièces au début de la partie.
-- Le jeu est local : les deux joueurs utilisent le même écran et jouent à tour de rôle.
-- La règle physique fait commencer le plus jeune joueur. Pour l'application, prévoir un choix du premier joueur à l'écran de démarrage, avec bleu sélectionné par défaut si aucun choix n'est fait.
-
-### 3.2 Inventaire exact
-
-Il existe sept formes. Chaque joueur possède **deux exemplaires de chaque forme**.
+Chaque forme est un polyomino, décrit par sa matrice d'occupation de référence (`X` occupé, `.` vide) :
 
 ```text
-MONO       DOMINO      BARRE_3      PETIT_L
-X          XX          XXX          XX
-                                      X
+MONO (1)   DOMINO (2)   BARRE (3)   PETIT L (3)
+X          XX           XXX         XX
+                                    X.
 
-S          T           GRAND_L
- X         XXX         XXX
-XX          X          X
-X
+S (4)      T (4)        GRAND L (4)
+.X         XXX          XXX
+XX         .X.          X..
+X.
 ```
 
-Matrice canonique de chaque forme :
+Contrôles de cohérence : 7 formes ; 1, 2, 3, 3, 4, 4 et 4 cases respectivement ; 2 exemplaires chacune ; 14 pièces et 42 cases par joueur. Il n'existe **ni carré de quatre cases, ni barre de quatre**.
 
-```ts
-const BASE_SHAPES = {
-  mono: [[1]],
-  domino: [[1, 1]],
-  bar3: [[1, 1, 1]],
-  smallL: [
-    [1, 1],
-    [1, 0],
-  ],
-  s: [
-    [0, 1],
-    [1, 1],
-    [1, 0],
-  ],
-  t: [
-    [1, 1, 1],
-    [0, 1, 0],
-  ],
-  largeL: [
-    [1, 1, 1],
-    [1, 0, 0],
-  ],
-} as const
-```
+### Orientations
 
-Contrôles de cohérence à tester :
+Une pièce peut être tournée par quarts de tour et, pour certaines formes, retournée comme un miroir. Tourner ou retourner ne consomme rien : c'est une orientation du même exemplaire.
 
-- 7 formes ;
-- 2 exemplaires de chaque forme ;
-- 14 pièces par joueur ;
-- 42 cases de pièces par joueur : `2 × (1 + 2 + 3 + 3 + 4 + 4 + 4)`.
+Le nombre d'orientations **géométriquement distinctes** compte, car c'est lui qui borne les coups possibles. Deux orientations sont identiques si, ramenées à l'origine, elles occupent le même ensemble de cases.
 
-Il n'y a pas de pièce carrée `O` ni de barre de quatre cases.
+| Forme | Orientations distinctes | Remarque |
+| --- | --- | --- |
+| Mono | 1 | invariante |
+| Domino | 2 | couché, debout |
+| Barre de 3 | 2 | couchée, debout |
+| Petit L | 4 | son miroir est déjà une de ses rotations |
+| S | 4 | 2 rotations × 2 miroirs ; le miroir donne le Z |
+| T | 4 | miroir redondant |
+| Grand L | 8 | 4 rotations × 2 miroirs ; le miroir donne le J |
 
-### 3.3 Orientations et retournements
+Seuls le **S** et le **grand L** gagnent quelque chose à être retournés. Pour les cinq autres formes, le miroir ne produit aucune géométrie nouvelle : la commande de retournement doit être **indisponible** sur ces formes plutôt que sans effet.
 
-- Toutes les pièces peuvent tourner par quarts de tour.
-- Le grand `L` peut être retourné pour devenir un `J`.
-- Le `S` peut être retourné pour devenir un `Z`.
-- Le miroir du petit `L` ne crée pas de nouvelle géométrie : il est déjà accessible par rotation.
-- Les autres retournements sont géométriquement redondants.
-- Retourner une pièce ne crée pas une nouvelle pièce d'inventaire : il s'agit d'une orientation du même exemplaire.
+Méthode pour obtenir cette table sans la coder en dur : engendrer les quatre rotations de la forme et les quatre rotations de son miroir, ramener chacune à l'origine, puis dédupliquer. La rotation d'un quart de tour horaire envoie la case `(x, y)` sur `(-y, x)` ; le miroir envoie `(x, y)` sur `(-x, y)` ; ramener à l'origine consiste à soustraire le minimum des abscisses et le minimum des ordonnées.
 
-Le moteur doit générer les rotations et réflexions à partir de la matrice de base, normaliser les coordonnées puis supprimer les doublons.
+### Déroulement d'un tour
 
-Nombre attendu d'orientations géométriques uniques en autorisant les miroirs :
+À son tour, un joueur choisit une forme dont il lui reste un exemplaire, choisit son orientation, choisit une colonne d'entrée, et la pièce descend verticalement jusqu'à sa position d'arrêt. Le tour ne se termine que si la pose est légale.
 
-- mono : 1 ;
-- domino : 2 ;
-- barre de 3 : 2 ;
-- petit L : 4 ;
-- S/Z : 4 ;
-- T : 4 ;
-- grand L/J : 8.
+Les joueurs alternent. Un joueur qui n'a **aucun** coup légal voit son tour passé automatiquement ; il ne peut jamais choisir de passer.
 
-### 3.4 Déroulement d'un tour
+### Chute
 
-À son tour, un joueur :
+La pièce entre par le haut, entièrement au-dessus de la grille, alignée sur une **colonne d'ancrage** — la colonne de sa case la plus à gauche. Elle descend d'une ligne tant que la position suivante n'entre pas en collision, et s'arrête à la dernière position sans collision.
 
-1. sélectionne une forme dont il reste au moins un exemplaire ;
-2. choisit son orientation ;
-3. choisit une colonne d'entrée au-dessus de la grille ;
-4. laisse la pièce descendre verticalement ;
-5. ne termine son tour que si la pose est légale.
+Il y a collision quand une case de la pièce sortirait latéralement de la grille, passerait sous la ligne du fond, ou recouvrirait une case déjà occupée. Tant qu'une case de la pièce est encore au-dessus de la grille, elle ne peut pas entrer en collision : c'est ce qui permet à une pièce d'entrer partiellement dans la grille puis de s'y arrêter.
 
-Une pose illégale ne consomme ni la pièce ni le tour.
+Une pièce ne peut jamais être posée plus haut que sa position naturelle de chute.
 
-### 3.5 Contraintes de placement
+### Légalité d'une pose
 
-Une pose est légale seulement si toutes les conditions suivantes sont remplies :
+Une pose est légale si et seulement si les trois conditions suivantes sont réunies. Chacune correspond à un **motif de refus distinct**, qui doit être restituable et affichable au joueur.
 
-1. la pièce entre horizontalement dans les neuf colonnes ;
-2. après sa descente, toutes ses cases sont dans les neuf lignes de la grille ;
-3. aucune case ne chevauche une case déjà occupée ;
-4. la pièce est arrivée à la première position où elle ne peut plus descendre ;
-5. elle ne laisse aucun vide directement sous une partie de sa face inférieure.
+1. **Débordement latéral** — la pièce, dans son orientation courante, tient entièrement dans les neuf colonnes depuis sa colonne d'ancrage. Sinon : refus, sans même simuler la chute.
+2. **Débordement par le haut** — après la chute, aucune case de la pièce ne reste au-dessus de la ligne `0`. Une colonne trop remplie pour l'accueillir produit ce refus.
+3. **Support intégral** — aucune case vide ne subsiste directement sous la pièce. Formellement, pour chaque case `(x, y)` de la pièce posée, il faut que `(x, y+1)` soit elle-même une case de cette pièce, ou que `y` soit la ligne du fond, ou que `(x, y+1)` soit déjà occupée, quelle que soit sa couleur. Sinon : refus.
 
-Formalisation de la règle « aucun trou sous une pièce » : pour chaque case de la nouvelle pièce, si la case située juste en dessous ne fait pas elle-même partie de la nouvelle pièce, alors cette case doit :
+Le support intégral est la règle la moins intuitive et la plus souvent mal reconstruite. Elle interdit qu'une pièce repose sur un seul point d'appui en surplombant un vide : un `T` **tige vers le bas, barre en haut**, lâché sur un sol plat, est **illégal**. Il s'immobiliserait sur sa tige seule, et les deux extrémités de sa barre surplomberaient le vide. Retourné — barre en bas, tige en l'air — le même `T` est légal sur ce sol plat.
 
-- être le fond de la grille ; ou
-- être déjà occupée par une pièce bleue ou blanche.
+Elle autorise en revanche un surplomb dont **toutes** les faces inférieures sont soutenues : le `T` tige vers le bas devient légal au-dessus de deux cases occupées séparées d'une case, la tige tombant dans le creux et chaque extrémité de la barre reposant sur un appui.
 
-Une pièce retenue par un seul point de collision mais dont une autre partie surplombe une case vide est donc interdite. Une pièce ne peut pas être placée volontairement plus haut que sa position naturelle de chute.
+Un refus ne consomme rien : ni la pièce, ni le tour. Ni le plateau, ni les réserves, ni le joueur au trait ne changent.
 
-### 3.6 Connexions et victoire immédiate
+### Connexion et victoire
 
-Deux cases de même couleur sont connectées si elles se touchent :
+Deux cases de **même couleur** sont connectées si elles se touchent par un côté **ou par un angle** : le voisinage compte les huit cases entourantes, diagonales comprises.
 
-- par un côté ; ou
-- par un angle.
+La connexion se lit sur la **couleur seule**. Deux pièces distinctes de même couleur qui se touchent forment une seule zone ; l'identité des pièces physiques ne sert qu'à l'affichage.
 
-La connectivité utilise donc les huit voisins d'une case.
+Immédiatement après une pose légale, le joueur qui vient de poser gagne si l'une de ses zones connectées touche à la fois :
 
-À la fin d'une pose légale, le joueur actif gagne immédiatement si une même composante connectée de sa couleur touche :
+- le bord gauche et le bord droit ; **ou**
+- le bord haut et le bord bas.
 
-- le bord gauche et le bord droit ; ou
-- le bord supérieur et le bord inférieur.
+Les deux paires de bords valent pour les deux joueurs : **aucun joueur ne se voit assigner un axe à l'avance**. Une connexion obtenue uniquement par des contacts diagonaux est valable. Seul le joueur qui vient de poser est examiné, et la victoire est immédiate — la partie ne continue pas jusqu'à la fin du tour.
 
-Une connexion diagonale est suffisante. Il n'est pas nécessaire de relier une paire de bords choisie à l'avance.
+### Fin par blocage et départage
 
-### 3.7 Absence de coup, passes et fin par blocage
+Quand plus personne ne peut jouer, la partie s'arrête et se départage aux points.
 
-- Un joueur doit jouer s'il possède au moins un coup légal.
-- S'il n'en possède aucun, son tour est automatiquement passé.
-- Après une pose, remettre le compteur de passes consécutives à zéro.
-- La partie se termine par blocage uniquement après deux tours consécutifs sans coup légal, un pour chaque joueur, sans pose entre les deux.
+Après une pose légale qui ne gagne pas, trois cas et trois seulement :
 
-Important : ne pas considérer qu'un joueur bloqué le restera définitivement. Une pièce adverse nouvellement posée peut créer un support et rendre un coup possible au tour suivant.
+1. l'adversaire a au moins un coup légal → c'est son tour ;
+2. l'adversaire n'a aucun coup légal mais le joueur qui vient de poser en a un → le tour de l'adversaire est **passé** et le même joueur rejoue ;
+3. aucun des deux n'a de coup légal → la partie est **terminée par blocage**.
 
-En cas de blocage total :
+Le départage compare la **taille de la plus grande zone connectée** de chaque joueur, au sens du voisinage à huit cases, en nombre de cases. La plus grande l'emporte. À égalité parfaite, **match nul**. Les deux scores sont affichés.
 
-1. calculer la taille en cases de la plus grande composante connectée bleue ;
-2. faire la même chose pour les blancs ;
-3. le score le plus élevé gagne.
+Un joueur bloqué ne l'est pas définitivement : une pièce adverse posée ensuite peut lui créer un appui et lui rendre un coup. Le blocage ne doit donc jamais être mémorisé comme un état du joueur, seulement recalculé à partir du plateau et de la réserve.
 
-La règle imprimée ne précise pas le cas d'une égalité parfaite. Décision appliquée dans l'application : déclarer un match nul.
+### Premier joueur
 
-## 4. Expérience utilisateur demandée
+La couleur qui ouvre la partie est **tirée au sort** au lancement, et annoncée avant la partie. Le joueur ne la choisit pas. (La règle physique fait commencer le plus jeune ; le tirage au sort en tient lieu à l'écran.)
 
-### 4.1 Disposition générale
+---
 
-Sur écran de bureau :
+## Notation d'une partie
+
+Format d'échange, à spécifier exactement : une autre implémentation doit lire et écrire les mêmes notations. Une partie s'écrit comme une suite de jetons courts, lisible et recopiable à la main, qui tient dans un message ou dans une adresse.
+
+### Grammaire
 
 ```text
-[ Réserve bleue ]   [ Grille 9×9 ]   [ Réserve blanche ]
+partie   := [ premier ] jeton*
+premier  := "b" | "w" | "blue" | "white"      défaut « b », omis à l'écriture
+jeton    := coup | passe
+coup     := forme [ miroir ] [ rotation ] colonne
+forme    := "1" | "2" | "3I" | "3L" | "4S" | "4T" | "4L"
+miroir   := "s"                               appliqué AVANT la rotation
+rotation := ("r" | "l") ("1" | "2" | "3")     quarts de tour horaires / antihoraires
+colonne  := "1".."9"                          toujours le dernier caractère
+passe    := "--"                              tour passé faute de coup légal
 ```
 
-- Les deux réserves doivent rester visibles.
-- La zone centrale contient l'état du tour, les entrées de colonnes et la grille.
-- La réserve adverse est visible mais non interactive.
-- Le bandeau placé au-dessus de la grille indique le joueur actif par une seule flèche : vers la réserve bleue à gauche ou vers la réserve blanche à droite. Il n'affiche pas de libellé de tour.
-- Utiliser un fond neutre suffisamment contrasté pour que les pièces blanches restent lisibles.
-- Sur bureau, utiliser trois colonnes d'environ `330 px / zone centrale / 330 px`. La grille centrale est limitée à environ `520 px` afin que les pièces de réserve puissent être représentées presque à la même échelle que les pièces jouées.
-
-Sur petit écran, conserver la grille prioritaire et réorganiser les réserves au-dessus et au-dessous. Les sept formes d'une réserve sont alors placées dans une rangée horizontale défilante, sans provoquer de débordement de page. La partie doit rester jouable en mode paysage sur tablette et sur mobile.
-
-### 4.2 Affichage de l'inventaire
-
-Afficher sept groupes de forme par joueur, sans nom visible et sans badge numérique.
+- Le nom de forme reprend le **nombre de cases** suivi de la silhouette : `1` mono, `2` domino, `3I` barre de trois, `3L` petit L, `4S` le S/Z, `4T` le T, `4L` le grand L/J.
+- La colonne est la **colonne d'ancrage**, celle de la case la plus à gauche de la pièce dans son orientation finale, numérotée de `1` à `9`. Ce n'est pas la colonne visée par le pointeur (voir l'histoire 2) : à l'écriture comme à la lecture, seule l'ancre compte.
+- Les jetons se séparent par une espace, une virgule ou un `+`, ce dernier permettant d'écrire une partie dans une adresse sans échappement.
+- La casse est libre à la lecture, normalisée à l'écriture.
+- Exemples : `15` mono en colonne 5 · `3Ir13` barre de trois debout en colonne 3 · `4Lsr27` grand L retourné puis tourné d'un demi-tour, ancré en colonne 7.
 
-- Chaque groupe conserve toujours deux silhouettes identiques : un exemplaire disponible est plein et constitue son propre bouton ; un exemplaire déjà joué reste visible sous forme de contour pointillé et n'est plus interactif.
-- La séquence visuelle est donc `deux pleines`, puis `une pleine + une pointillée`, puis `deux pointillées`.
-- Sur bureau, chaque forme occupe sa propre ligne. Sur tablette et mobile, ces lignes deviennent des cartes dans une rangée horizontale défilante.
-- Lorsque les deux exemplaires sont joués, les deux silhouettes pointillées restent pleinement lisibles mais aucune zone interactive ne subsiste.
-- Une pose décrémente exactement une occurrence.
-- Le joueur sélectionne directement une silhouette disponible, jamais la ligne ou le groupe entier. Les deux exemplaires d'une même forme ont le même comportement de jeu mais des boutons et états sélectionnés distincts.
-- Les noms de forme et les quantités restent disponibles uniquement dans les noms accessibles du groupe et des boutons (`aria-label`) pour les lecteurs d'écran et les tests.
-- Les cellules graphiques des pièces de réserve utilisent une taille d'environ `46 px`. La grille centrale est dimensionnée pour que la partie visible d'une case jouée soit de taille équivalente.
-- Choisir une orientation initiale compacte et reconnaissable ; le `S` est affiché horizontalement pour limiter la hauteur de la réserve. Cette orientation est une donnée partagée par la réserve et le reducer : au premier clic, l'aperçu central doit être strictement orienté comme la silhouette cliquée, puis les rotations partent de cette orientation.
-- La réserve affiche les formes directement sur son fond, sans rectangle blanc ni bordure permanente autour de chaque paire. Un fond léger épouse uniquement la silhouette cliquée au survol ou pour signaler la sélection ; il ne doit modifier ni marge, ni padding, ni position afin d'éviter tout saut.
-- La réserve blanche utilise un fond gris bleuté plus soutenu. Les silhouettes blanches pleines ont un contour externe gris foncé, et leurs versions indisponibles un contour pointillé sombre.
-- Supprimer entièrement l'en-tête visible de chaque réserve : aucun texte « Réserve », nom de couleur, pastille ou badge de tour ne doit apparaître au-dessus des pièces.
+### Canonicité
 
-### 4.3 Sélection, rotation et miroir
+Une géométrie donnée ne possède qu'**une seule** écriture canonique : celle de son orientation distincte, la première rencontrée en énumérant d'abord les rotations non retournées `0, 1, 2, 3`, puis les rotations retournées. Les écritures redondantes restent acceptées en lecture et ramenées à cette forme ; seule la forme canonique est produite à l'écriture. Réécrire une partie déjà canonique la laisse identique, caractère pour caractère.
 
-Interaction demandée :
+Table complète des jetons canoniques, ici en colonne 1 :
 
-- premier clic sur un exemplaire disponible : sélection de cet exemplaire ;
-- clic sur l'autre exemplaire de la même forme : changement de sélection sans rotation ;
-- nouveau clic sur l'exemplaire déjà sélectionné : rotation de 90° ;
-- bouton visible « Retourner » pour `grand L` et `S` ;
-- raccourci clavier `F` pour retourner ;
-- raccourci clavier `R`, `↑` ou `↓` pour tourner, en complément du clic ; `←` et `→` visent une colonne et `Entrée` pose ;
-- afficher la pièce sélectionnée dans une zone dédiée au-dessus de la grille ;
-- l'aperçu central est lui-même une commande de proximité : le clic gauche tourne, le clic droit retourne, sans menu contextuel du navigateur. Les boutons `Tourner`/`Retourner` restent affichés : ce sont eux qui font découvrir la commande, l'aperçu ne fait qu'éviter l'aller-retour du pointeur ;
-- appliquer les rotations et retournements uniquement à cet aperçu central et au ghost ; les silhouettes de réserve restent dans leur orientation canonique compacte.
+| Forme | Jetons canoniques |
+| --- | --- |
+| Mono | `11` |
+| Domino | `21` `2r11` |
+| Barre de 3 | `3I1` `3Ir11` |
+| Petit L | `3L1` `3Lr11` `3Lr21` `3Lr31` |
+| S | `4S1` `4Sr11` `4Ss1` `4Ssr11` |
+| T | `4T1` `4Tr11` `4Tr21` `4Tr31` |
+| Grand L | `4L1` `4Lr11` `4Lr21` `4Lr31` `4Ls1` `4Lsr11` `4Lsr21` `4Lsr31` |
 
-Le bouton de retournement peut être masqué ou désactivé pour les formes dont le miroir est redondant.
+Exemples de normalisation : `2r23` → `23` (demi-tour sans effet sur un domino) · `1r27` → `17` · `2l13` → `2r13` (quart antihoraire ramené à son complément horaire) · `3Ls4` → `3Lr14` (miroir redondant du petit L) · `4Ls5` reste `4Ls5` (miroir utile) · `4Ssr21` → `4Ss1`.
 
-Ne pas afficher de texte du type « nom de la pièce · 90° ». La zone centrale contient seulement la silhouette sélectionnée et les boutons `Tourner`/`Retourner`.
+### Passes
 
-La zone de sélection doit conserver une hauteur fixe d'environ `150 px`, qu'une pièce soit sélectionnée ou non, afin de contenir une orientation de trois cases à l'échelle de jeu. Les cellules de l'aperçu central utilisent exactement la même taille nominale que celles de la réserve (`46 px`) et une taille visuelle équivalente aux cases jouées. Les entrées de colonnes ont elles aussi un espace réservé de hauteur fixe. Le bord supérieur de la grille ne doit donc jamais changer de position lors d'une sélection, d'une rotation ou d'un retournement.
+Un tour passé est entièrement déterminé par la position : le jeton `--` est donc **facultatif à la lecture** mais **toujours écrit**. Un `--` placé là où aucun tour n'est réellement passé est refusé.
 
-### 4.4 Ghost et dépôt
+### Validation
 
-La visée se fait directement sur la grille quand le pointeur sait survoler, et par la rangée de flèches sinon. Les deux chemins partagent la même règle de position.
+Toute notation est vérifiée coup par coup en la rejouant depuis une partie vierge, avec les mêmes règles de légalité que le jeu. Un coup impossible est refusé en indiquant **lequel** — son rang à partir du premier coup, hors indication de premier joueur — et **pourquoi**, parmi : syntaxe invalide, pièce épuisée, débordement latéral, débordement par le haut, support insuffisant, partie déjà terminée, passe non forcée.
 
-- Pointeur fin avec survol : dès qu'une pièce est sélectionnée, la grille entière **et la bande qui la surmonte** deviennent la surface de visée. La pièce suit horizontalement la colonne survolée et le clic la pose. Ne pas afficher de rangée de flèches dans ce cas : voir la pièce se déplacer suffit. La bande supérieure est indispensable : une grille presque pleine n'offrirait plus de case libre à survoler, et l'approche naturelle du pointeur se fait par le haut.
-- Pointeur grossier ou sans survol : afficher les neuf zones d'entrée cliquables au-dessus de la grille, uniquement lorsqu'une pièce est sélectionnée. Chaque zone affiche seulement une flèche. Ne pas afficher les numéros de colonnes ; conserver « colonne N » dans l'`aria-label` du bouton.
-- Clavier : `←` et `→` visent une colonne, `↑`, `↓` et `R` tournent, `F` retourne, `Entrée` ou `Espace` pose. Le jeu doit rester entièrement jouable au clavier alors que les flèches d'entrée ont disparu de l'écran.
-- L'aperçu ghost occupe exactement les cases finales calculées par le moteur.
-- Ghost valide : couleur du joueur avec transparence et contour positif.
-- Ghost invalide : rouge ou hachuré, avec une courte raison (`collision`, `vide sous la pièce`).
-- Le clic sur une position invalide ne change pas l'état de la partie.
-- Après validation, animer visuellement la descente, mais appliquer la logique de jeu de façon déterministe et indépendante de l'animation.
+Un refus n'applique **rien** : aucune partie partielle n'est restituée.
 
-Convention de visée, portée par `aimedColumn` et partagée par le survol, les flèches et le clavier : la colonne visée porte le **centre** de la matrice normalisée, jamais son bord gauche, et la pièce est retenue contre les bords du plateau au lieu de dépasser. Viser le bord droit avec une barre 3 la pose donc sur les colonnes 7, 8 et 9. Une largeur paire penche à gauche. Le moteur continue de refuser un ancrage hors plateau, mais l'interface ne peut plus en produire.
+### Ce que la notation restitue
 
-### 4.5 Retours d'état
+Rejouer une notation reconstitue la position exacte : plateau, réserves des deux joueurs, exemplaires consommés, joueur au trait, et résultat si la partie est finie — victoire par connexion comme fin par blocage, scores de départage compris.
 
-Prévoir :
+---
 
-- `Au tour des bleus/blancs` ;
-- message court lors d'une pose refusée ;
-- message lors d'une passe forcée ;
-- panneau compact de fin de partie indiquant la raison : connexion, blocage ou match nul ;
-- scores des plus grandes zones en cas de blocage ;
-- bouton `Nouvelle partie` ;
-- aide/règles résumées sans quitter la partie.
+## Histoires utilisateur
 
-Le panneau final ne doit jamais être modal et ne doit jamais recouvrir la grille. Il remplace la barre d'état au-dessus du plateau afin que le dernier coup et le chemin gagnant restent immédiatement visibles. Le bandeau, la zone de sélection vide et l'espace des entrées de colonnes conservent exactement leurs hauteurs pendant ce remplacement : le bord supérieur de la grille ne doit pas remonter à la fin de la partie. Le panneau contient un bouton compact `Rejouer`.
+Ordre d'implémentation. Chaque histoire suppose les précédentes livrées et n'anticipe sur aucune suivante. Les critères d'acceptation sont rédigés pour être vérifiables sans interprétation.
 
-Ne pas afficher de texte d'instruction permanent lorsque le visuel suffit. Les informations nécessaires à l'accessibilité et aux tests doivent être placées dans des attributs `aria-*` ou `data-testid`, pas ajoutées comme libellés visibles.
+Trois exigences transverses valent dans **toutes** les histoires, à traiter au fil de l'eau plutôt qu'en fin de projet :
 
-### 4.6 Continuité visuelle des pièces et chemin gagnant
+- **Refus sans effet de bord** — toute action refusée laisse le plateau, les réserves, le joueur au trait et la sélection strictement inchangés.
+- **Distinction non chromatique** — les deux camps ne doivent jamais se distinguer par la seule couleur : silhouette, contour, position à l'écran ou libellé doivent suffire.
+- **Annonce des changements d'état** — tout changement important (tour, refus, tour passé, fin de partie) est perceptible sans voir l'écran.
 
-- Les carrés qui composent une même pièce doivent former une silhouette continue, dans la réserve, dans le ghost et une fois posés sur la grille.
-- Dans la réserve, les cellules d'une matrice se touchent sans gouttière ni bordure interne.
-- Une silhouette est un chemin SVG unique par pièce, tracé dans un `viewBox` exprimé en cases. Le contour est celui de l'union des cases, pas la juxtaposition de rectangles par case : parcourir les arêtes de bord de l'union, fusionner les segments colinéaires, puis décaler chaque arête vers l'intérieur du retrait. Deux cases qui ne se touchent que par un coin donnent deux boucles distinctes. Ne jamais empiler un rectangle par case : dans un angle rentrant de `L`, `T` ou `S`, la case du coin dépasse alors de la largeur du retrait et laisse une encoche visible dans le creux.
-- Le chemin porte directement `fill` et `stroke`. Comme il ne contient aucune arête interne, un trait ne peut plus apparaître dans les angles rentrants ; aucun filtre `feMorphology` n'est nécessaire. Ne jamais appliquer de `drop-shadow` CSS décalée aux chemins SVG du plateau : ses unités sont mises à l'échelle du `viewBox` et créent de grosses formes grises autour des pièces. La grille reste dessinée sous cette couche par les bordures fines des cases.
-- Le contour est un réglage partagé : `--piece-outline` fixe la même épaisseur, en unités de case, pour la réserve, l'aperçu, le ghost et la grille. Seule la teinte change avec le joueur, `--blue-outline` et `--white-outline`. Un exemplaire déjà joué reprend ce même contour en pointillé, sans remplissage.
-- Sur le plateau, utiliser le `pieceId` pour regrouper les cases d'une même pièce.
-- Les cellules des polyominos restent rectangulaires, sans arrondi aux angles rentrants. En particulier, le `S`/`Z` ne doit présenter aucun petit coin, encoche ou artefact à ses jonctions.
-- Deux pièces distinctes, même de même couleur et adjacentes, doivent rester visuellement séparables.
-- Les pièces blanches utilisent un contour externe gris sur fond gris bleuté pour rester lisibles, sans ajouter de lignes entre les cellules d'une même pièce.
-- Après une victoire par connexion, reconstruire un chemin précis reliant les deux bords opposés et surligner uniquement ses cellules avec un contour SVG lumineux jaune/or animé. Ce contour reste transparent : il ne pose aucun fond au-dessus des pièces et ne change jamais la couleur bleue ou blanche du chemin victorieux.
-- Le surlignage doit respecter `prefers-reduced-motion`.
+---
 
-### 4.7 Chargement de positions pour les tests visuels
+### Histoire 1 — Ouvrir une position depuis un lien
 
-L'application peut démarrer directement depuis une grille non vide fournie dans la query string. Cette entrée est réservée aux tests, démonstrations et reproductions visuelles ; elle n'ajoute aucun contrôle visible à l'interface.
+*Lié au support : suppose un lien ouvrable. En terminal, la même capacité se lit depuis un argument ou un fichier.*
 
-- Paramètre obligatoire : `board`, avec exactement 9 lignes de 9 caractères.
-- Symboles partagés avec `evaluation.test.ts` : `B` pour bleu, `W` pour blanc et `.` pour vide.
-- Dans une URL, séparer les lignes par `/`. Une chaîne compacte de 81 caractères et le format multiligne des tests sont aussi acceptés par le parseur commun.
-- Paramètre optionnel : `turn=blue` ou `turn=white`, bleu par défaut. Les alias `B` et `W` sont acceptés.
-- Une grille valide démarre directement en phase `playing`, sans écran de configuration.
-- Si la grille contient déjà une connexion gagnante pour une seule couleur, démarrer en phase `finished`, afficher le panneau final et reconstruire le chemin gagnant. Refuser une grille où les deux joueurs gagnent simultanément.
-- Les inventaires restent complets : la représentation `B/W/.` ne contient pas l'historique des pièces jouées. Cette entrée sert à tester le plateau et les interactions depuis la position chargée, pas à restaurer une sauvegarde exacte.
-- Pour le rendu SVG, regrouper en une même pièce de fixture les cases orthogonalement connexes d'une même couleur. Deux pièces réelles de même couleur qui se touchent orthogonalement ne peuvent pas être distinguées par ce format volontairement simple.
+**Pour qui, pourquoi** — pour toute personne qui reproduit un bug, prépare une démonstration ou vérifie un rendu : arriver directement sur une position donnée, sans rejouer la partie à la main.
 
-Exemple avec un S bleu et une case blanche, au tour des blancs :
+**Ce que ça recouvre** — l'affichage d'un plateau 9×9 et de ses pièces, et le chargement d'une position décrite sous forme de grille dans le lien. Aucun coup n'est encore jouable.
 
-```text
-?board=........./........./........./........./........./........./.B......./BB......./B.......W&turn=white
-```
+Format de grille : neuf lignes de neuf caractères, `B` pour une case bleue, `W` pour une case blanche, `.` pour une case vide. Les lignes se séparent par `/`, `|` ou un retour à la ligne ; une chaîne compacte de 81 caractères est également acceptée. Un second paramètre facultatif désigne le joueur au trait, `blue` ou `white` — les initiales `B` et `W` sont acceptées —, bleu par défaut.
 
-## 5. Algorithmes de domaine
+Ce format décrit **des cases, pas des pièces** : il ne restitue ni les réserves consommées, ni la frontière entre deux pièces adjacentes de même couleur. Les réserves restent donc complètes. Pour l'affichage, les cases d'une même couleur connectées **orthogonalement** sont regroupées en une silhouette unique. Restituer une partie exacte est le rôle de la notation (histoire 6).
 
-### 5.1 Normalisation d'une forme
+**Critères d'acceptation**
 
-Pour toute liste de coordonnées :
+- Une grille valide ouvre directement la partie sur la position décrite, sans passer par l'écran de démarrage.
+- Les trois écritures — lignes séparées par `/`, lignes séparées par retour à la ligne, chaîne compacte de 81 caractères — donnent la même position.
+- Toute autre dimension que 9×9, ou tout symbole autre que `B`, `W` et `.`, est refusée avec un message ; le jeu retombe sur son écran de démarrage plutôt que sur une position partielle.
+- Un joueur au trait inconnu est refusé de la même façon.
+- Les cases d'une même couleur qui se touchent par un côté forment une silhouette continue ; deux zones qui ne se touchent que par un angle restent deux silhouettes.
+- Le plateau est annoncé comme une grille de 9 lignes sur 9 colonnes, et chaque case est désignable par sa ligne, sa colonne et son occupant.
 
-1. soustraire le `x` minimal à tous les `x` ;
-2. soustraire le `y` minimal à tous les `y` ;
-3. trier les cases par `y`, puis `x` ;
-4. produire une clé stable comme `x,y|x,y|...`.
+Le cas d'une position **déjà gagnante** relève de l'histoire 4 : tant que la victoire n'est pas détectée, une telle grille s'affiche simplement telle quelle.
 
-Cette clé sert à dédupliquer les symétries.
+---
 
-### 5.2 Transformations
+### Histoire 2 — Choisir une pièce et la faire tomber
 
-Rotation horaire autour de l'origine, suivie d'une normalisation :
+**Pour qui, pourquoi** — pour deux joueurs sur le même écran : prendre une pièce dans sa réserve, l'orienter, viser une colonne et la voir tomber. À ce stade la pièce s'empile sur ce qu'elle rencontre ; les poses interdites ne sont pas encore refusées, c'est l'objet de l'histoire 3.
 
-```text
-(x, y) -> (-y, x)
-```
+**Ce que ça recouvre** — le lancement d'une partie, les deux réserves, la sélection d'un exemplaire, la rotation, le retournement, la visée d'une colonne, l'aperçu de la position d'arrivée, la pose, la consommation de l'exemplaire et l'alternance des tours.
 
-Réflexion horizontale, suivie d'une normalisation :
+**Lancement.** Un écran de départ lance une partie à deux joueurs sur le même écran et donne accès à un résumé des règles. Il annonce que la couleur qui commence est tirée au sort. Une fois la partie lancée, un résumé des règles reste consultable sans quitter la partie, et une commande permet à tout moment de recommencer.
 
-```text
-(x, y) -> (-x, y)
-```
+**Réserves.** Chaque joueur voit ses sept formes, chacune représentée par **deux silhouettes** côte à côte. Un exemplaire disponible est plein et sélectionnable ; un exemplaire joué reste visible en **contour pointillé** et n'est plus sélectionnable. La séquence d'une forme est donc : deux pleines, puis une pleine et une pointillée, puis deux pointillées. Aucun nom de forme ni compteur numérique n'est affiché ; ces informations restent disponibles pour qui n'a pas accès à l'image. La réserve adverse est visible mais inerte.
 
-Pour énumérer les coups, générer les quatre rotations de la base puis les quatre rotations de la base réfléchie, et supprimer les doublons par clé normalisée.
+Les silhouettes de réserve gardent une orientation fixe, compacte et reconnaissable : elles ne tournent jamais avec la sélection. Le `S` y est présenté couché, pour ne pas creuser la hauteur de la réserve.
 
-Pour l'UI, garder `rotation` et `flipped` explicites afin que `Tourner` et `Retourner` aient un comportement prévisible.
+**Sélection et orientation.** Le premier choix d'un exemplaire disponible le sélectionne, dans exactement l'orientation où sa silhouette est dessinée dans la réserve. Choisir l'autre exemplaire de la même forme change la sélection sans rien tourner. Choisir à nouveau l'exemplaire déjà sélectionné le fait tourner d'un quart de tour. Une commande distincte retourne la pièce, disponible seulement pour le `S` et le grand `L`.
 
-### 5.3 Calcul de la chute
+La pièce sélectionnée est montrée en grand dans une zone dédiée, à l'échelle du plateau. Cette zone est elle-même une commande de proximité : y agir tourne la pièce, et l'action secondaire la retourne. Les commandes explicites de rotation et de retournement restent visibles — ce sont elles qui font découvrir la manipulation.
 
-Convention de coordonnées :
+**Visée.** La colonne visée porte le **centre** de la pièce, jamais son bord gauche, et la pièce est retenue contre les bords du plateau au lieu de dépasser. Précisément : colonne d'ancrage = colonne visée − partie entière de `(largeur − 1) / 2`, ramenée dans l'intervalle `[0, 9 − largeur]`. Une largeur paire penche donc à gauche. Viser le bord droit avec une barre de trois la pose sur les trois dernières colonnes.
 
-- `x = 0` est la colonne gauche ;
-- `x = 8` est la colonne droite ;
-- `y = 0` est la ligne supérieure ;
-- `y = 8` est la ligne du fond.
+Cette conversion est **unique** et partagée par tous les modes de visée. La pose, elle, ne transmet jamais que la colonne : la position d'arrivée est toujours recalculée par les règles, jamais fournie par l'affichage.
 
-Pour une orientation et une colonne d'ancrage :
+**Aperçu.** Dès qu'une pièce est sélectionnée, un aperçu occupe exactement les cases où elle atterrirait, dans la couleur du joueur et en transparence. Il suit la visée et l'orientation.
 
-1. refuser immédiatement si `anchorX < 0` ou `anchorX + width > 9` ;
-2. initialiser `anchorY = -height`, pièce entièrement au-dessus de la grille ;
-3. descendre d'une ligne tant que la position suivante n'entre pas en collision ;
-4. s'arrêter à la dernière position sans collision ;
-5. refuser si une case de la pièce possède encore `y < 0` : elle dépasse du haut ;
-6. appliquer la règle de support intégral ;
-7. retourner la liste des cases finales et, en cas d'échec, une raison structurée.
+**Deux façons de viser, selon le support.** Là où le pointeur sait survoler, le plateau entier **et la bande qui le surmonte** deviennent la surface de visée : la pièce suit la colonne survolée et l'action la pose ; aucune rangée de commandes n'est alors affichée. La bande supérieure est indispensable, un plateau presque plein n'offrant plus de case libre à survoler. Là où le pointeur ne survole pas, neuf zones d'entrée apparaissent au-dessus du plateau, uniquement quand une pièce est sélectionnée, chacune réduite à une flèche sans numéro visible. Le jeu doit rester intégralement jouable au clavier : viser à gauche et à droite, tourner, retourner, poser.
 
-Pendant la simulation, les cases dont `y < 0` sont hors de la grille et ne collisionnent pas encore. Une case dont `y >= 9`, dont `x` sort de la grille ou qui chevauche une case occupée collisionne.
+**Critères d'acceptation**
 
-Le résultat distingue une pose valide, qui porte ses cases finales, d'un refus qui porte une raison structurée `horizontal-bounds`, `overflow` ou `unsupported` ainsi que les cases d'aperçu nécessaires au ghost invalide.
+- Une partie lancée depuis l'écran de départ commence sur un plateau vide, réserves complètes, avec une couleur de départ tirée au sort et annoncée.
+- La commande de recommencement restaure exactement un plateau vide et deux réserves complètes.
+- Un résumé des règles est consultable depuis l'écran de départ et depuis la partie en cours, sans perdre la position.
+- Seule la réserve du joueur au trait est interactive ; celle de l'adversaire ne répond à rien.
+- Un premier choix sélectionne l'exemplaire visé, dans l'orientation exacte de sa silhouette de réserve.
+- Choisir l'autre exemplaire de la même forme change la sélection sans modifier l'orientation.
+- Choisir à nouveau le même exemplaire tourne la pièce d'un quart de tour.
+- La commande de retournement transforme le grand `L` en `J` et le `S` en `Z` ; elle est indisponible pour les cinq autres formes.
+- Les silhouettes de réserve ne tournent jamais, quelle que soit l'orientation de la sélection.
+- Une pose consomme **exactement** l'exemplaire choisi : c'est cette silhouette-là qui devient pointillée, pas l'autre.
+- Après une pose, le tour passe à l'adversaire et la sélection est vidée.
+- La pièce s'arrête sur la première case qu'elle rencontre en descendant et ne traverse jamais une case occupée.
+- L'aperçu et la pose définitive désignent toujours les mêmes cases.
+- Viser une colonne avec une barre de trois couvre cette colonne et ses deux voisines ; viser un bord retient la pièce contre ce bord au lieu de la faire dépasser.
+- Sélectionner, tourner ou retourner ne déplace aucun autre élément à l'écran : le bord supérieur du plateau ne bouge pas.
+- Toute la partie est jouable au clavier seul, y compris là où les zones d'entrée ne sont pas affichées.
+- Le nom de chaque forme et le nombre d'exemplaires restants sont accessibles sans voir l'image, bien qu'ils ne soient pas écrits à l'écran.
 
-La collision pendant la chute sert à déterminer l'arrêt ; elle n'a normalement pas besoin d'être présentée comme une erreur finale distincte.
+---
 
-### 5.4 Validation du support
+### Histoire 3 — Refuser les poses illégales
 
-Créer un `Set` des coordonnées finales de la nouvelle pièce.
+**Pour qui, pourquoi** — pour que le jeu soit le jeu : sans support intégral ni contrôle des débordements, Linkx n'est qu'un empilement.
 
-Pour chaque nouvelle case `(x, y)` :
+**Ce que ça recouvre** — les trois motifs de refus décrits dans « Légalité d'une pose », leur restitution au joueur, et l'énumération des coups légaux qui en découle.
 
-```text
-si (x, y + 1) appartient à la nouvelle pièce : OK
-sinon si y == 8 : OK
-sinon si board[y + 1][x] est occupée : OK
-sinon : pose interdite
-```
+L'aperçu distingue désormais deux états : valide, dans la couleur du joueur ; invalide, nettement différencié, accompagné d'une raison courte. Agir sur une position invalide ne change rien.
 
-Cette vérification doit être partagée entre le ghost, l'énumération des coups et la pose définitive.
+L'énumération des coups légaux d'un joueur — toutes ses formes encore en réserve, toutes leurs orientations distinctes, toutes les colonnes d'ancrage possibles, filtrées par la légalité — devient la source de vérité pour savoir si un joueur peut jouer. Elle sert aux histoires 5, 10 et 11. Sur une grille vide, elle produit **95** coups légaux ; ce nombre retombe sous 20 en fin de partie.
 
-### 5.5 Énumération des coups légaux
+**Critères d'acceptation**
 
-Pour le joueur demandé :
+- Une pièce qui laisserait un vide sous une partie de sa face inférieure ne peut pas être posée.
+- Un `T` tige vers le bas, lâché sur un sol plat, est refusé pour cette raison ; le même `T` barre en bas est accepté.
+- Un `T` tige vers le bas lâché au-dessus de deux cases occupées séparées d'une case est accepté : chacun de ses appuis repose sur quelque chose.
+- Une pièce qui, dans son orientation courante, sortirait latéralement du plateau est refusée sans qu'aucune chute soit simulée.
+- Une pièce qui ne peut pas entrer entièrement dans une colonne trop remplie est refusée pour débordement par le haut.
+- Chacun de ces trois refus produit une raison distincte, restituée au joueur en clair.
+- Une pose refusée ne modifie ni le plateau, ni les réserves, ni le joueur au trait, ni la sélection.
+- L'aperçu invalide se distingue de l'aperçu valide autrement que par la seule couleur.
+- Sur une grille vide, l'énumération des coups légaux d'un joueur dont la réserve est complète en produit 95.
+- Une forme dont les deux exemplaires sont joués n'apparaît jamais dans cette énumération.
 
-1. parcourir les sept formes dont le compteur d'inventaire est supérieur à zéro ;
-2. parcourir leurs orientations uniques ;
-3. parcourir `anchorX` de `0` à `9 - width` ;
-4. appeler le calcul de chute ;
-5. conserver uniquement les résultats valides.
+---
 
-La grille est petite : aucune optimisation complexe n'est nécessaire. Cette fonction est la source de vérité pour les passes forcées.
+### Histoire 4 — Gagner en reliant deux bords
 
-### 5.6 Détection des composantes
+**Pour qui, pourquoi** — pour que la partie ait une condition de victoire, détectée sans que les joueurs aient à la constater eux-mêmes.
 
-Utiliser un BFS ou DFS sur les 81 cases avec les huit directions :
+**Ce que ça recouvre** — la détection de connexion décrite dans « Connexion et victoire », l'arrêt immédiat de la partie, et un panneau de fin.
 
-```text
-(-1,-1) (0,-1) (1,-1)
-(-1, 0)        (1, 0)
-(-1, 1) (0, 1) (1, 1)
-```
+Le panneau de fin **n'est jamais modal et ne recouvre jamais le plateau** : il remplace le bandeau de tour au-dessus de la grille, pour que le dernier coup reste visible. Il annonce le vainqueur, la raison, et propose de rejouer. Le passage à l'état final ne doit déplacer aucun élément : les hauteurs réservées au bandeau, à la sélection et aux zones d'entrée restent les mêmes, le bord supérieur du plateau ne remonte pas.
 
-Pour chaque composante d'une couleur, conserver :
+**Critères d'acceptation**
 
-- sa taille en cases ;
-- touche gauche (`x == 0`) ;
-- touche droite (`x == 8`) ;
-- touche haut (`y == 0`) ;
-- touche bas (`y == 8`).
+- Une zone reliant le bord gauche au bord droit gagne ; une zone reliant le bord haut au bord bas gagne.
+- Les deux paires de bords valent pour les deux joueurs ; aucun axe n'est assigné à un joueur.
+- Une connexion composée uniquement de contacts diagonaux gagne.
+- Deux zones de même couleur séparées d'une case ne sont pas connectées.
+- Une case adverse ne relie jamais deux zones.
+- Une zone qui ne touche qu'un seul bord ne gagne pas.
+- La victoire est détectée immédiatement après le coup qui complète la connexion, et seulement pour le joueur qui vient de poser.
+- Le panneau de fin ne recouvre à aucun moment le plateau.
+- Le passage à l'état final ne change pas la position verticale du plateau.
+- Le résultat est annoncé sans qu'il faille voir l'écran, et la commande qui permet de rejouer est atteignable au clavier immédiatement après la fin.
+- Une position chargée par un lien (histoire 1) déjà gagnante pour une seule couleur ouvre directement sur l'état final.
+- Une position chargée où les deux couleurs gagnent simultanément est refusée : elle ne peut pas résulter d'une partie réelle, la victoire étant détectée dès le coup qui la produit.
 
-Une composante est gagnante si :
+---
 
-```text
-(touche gauche ET touche droite)
-OU
-(touche haut ET touche bas)
-```
+### Histoire 5 — Tour passé, blocage et départage
 
-Le plus grand score de zone est le maximum des tailles de composantes, ou zéro si le joueur n'a aucune case.
+**Pour qui, pourquoi** — pour que les fins de partie serrées, où le plateau se referme, se terminent proprement au lieu de bloquer les joueurs.
 
-Pour le surlignage final, conserver ou reconstruire les prédécesseurs d'un BFS à huit voisins :
+**Ce que ça recouvre** — le tour automatiquement passé, la fin par blocage et le départage à la plus grande zone, tels que décrits dans « Fin par blocage et départage ».
 
-1. chercher d'abord un chemin depuis toutes les cases du bord gauche jusqu'au bord droit ;
-2. si aucun chemin horizontal n'existe, chercher depuis le bord supérieur jusqu'au bord inférieur ;
-3. au premier bord opposé atteint, remonter les prédécesseurs jusqu'à la source ;
-4. retourner uniquement cette liste ordonnée de cases comme chemin gagnant.
+**Critères d'acceptation**
 
-Le moteur de victoire et le calcul du chemin doivent utiliser la même connectivité à huit voisins. Le chemin peut donc contenir des pas diagonaux.
+- Un joueur qui n'a aucun coup légal voit son tour passé automatiquement ; il ne peut jamais choisir de passer.
+- Un tour passé est annoncé explicitement, en nommant le joueur concerné.
+- Quand le tour de l'adversaire est passé, le joueur qui vient de poser rejoue immédiatement, et sa sélection est conservée s'il lui reste un exemplaire de la forme choisie — il n'a pas à la reprendre. Un changement de joueur, lui, vide toujours la sélection.
+- Un joueur qui n'avait aucun coup peut rejouer normalement si une pose adverse lui a créé un appui.
+- La partie ne se termine par blocage que lorsque **aucun** des deux joueurs n'a de coup légal ; une absence de coup suivie d'une pose ne termine pas la partie.
+- Le blocage compare la plus grande zone connectée de chaque joueur, en nombre de cases, voisinage à huit cases compris ; la plus grande l'emporte.
+- Les deux scores sont affichés dans le panneau de fin.
+- Des plus grandes zones égales donnent un match nul, annoncé comme tel et distingué d'une victoire.
+- La résolution d'un blocage examine au plus les deux joueurs : elle ne peut pas boucler.
 
-### 5.7 Avancement du tour
+---
 
-Après une pose valide :
+### Histoire 6 — Rejouer une partie depuis sa notation
 
-1. écrire les cases avec la couleur et l'ID de pièce ;
-2. décrémenter l'inventaire ;
-3. si le tour passe à l'adversaire, vider la sélection ; si l'adversaire est passé automatiquement et que le même joueur rejoue, conserver la sélection seulement s'il reste un exemplaire ;
-4. tester la victoire du joueur actif ;
-5. si victoire, terminer immédiatement ;
-6. remettre `consecutivePasses` à zéro ;
-7. changer de joueur ;
-8. tester si le nouveau joueur possède un coup légal ;
-9. sinon, enregistrer une passe forcée et revenir à l'autre joueur ;
-10. si la seconde absence de coup est consécutive, terminer par comparaison des zones.
+*Lié au support pour la partie « lien » ; le format lui-même est indépendant du support et doit être implémenté partout.*
 
-Éviter une boucle infinie dans la résolution automatique. Au maximum deux joueurs sont examinés avant de conclure au blocage.
+**Pour qui, pourquoi** — pour partager une partie, reprendre une position exacte, ou décrire un bug de façon reproductible. Contrairement à la grille de l'histoire 1, la notation restitue **tout**.
 
-### 5.8 Évaluation d'une grille
+**Ce que ça recouvre** — la lecture et l'écriture du format décrit dans « Notation d'une partie », et l'ouverture d'une partie depuis une notation fournie dans un lien.
 
-Exposer `getConnectionScore(board, player)`, une fonction pure qui estime, pour un joueur, le nombre minimal de cases vides encore nécessaires pour relier une paire de bords opposés :
+Quand les deux entrées sont fournies, la notation l'emporte sur la grille : elle est strictement plus riche. Le paramètre de joueur au trait ne s'applique qu'à la grille, une notation portant elle-même son premier joueur.
 
-- entrer dans une case de sa couleur coûte `0` ;
-- entrer dans une case vide coûte `1` ;
-- une case adverse est infranchissable ;
-- les déplacements utilisent les mêmes huit voisins que la détection de victoire ;
-- calculer séparément le plus court chemin gauche-droite et haut-bas, puis conserver le plus petit score.
+**Critères d'acceptation**
 
-Une grille vide a donc un score de `9`, une grille déjà gagnante un score de `0`, et une grille dont les deux axes sont rendus impossibles par l'adversaire un score infini. Un score plus petit est meilleur.
+- Rejouer une notation restitue le plateau, les réserves des deux joueurs, les exemplaires consommés, le joueur au trait et, le cas échéant, le résultat.
+- Une partie terminée par connexion et une partie terminée par blocage sont toutes deux restituées, la seconde avec ses scores de départage.
+- Un tour passé apparaît explicitement dans la notation écrite.
+- Une notation lue puis réécrite est identique caractère pour caractère, y compris la notation vide.
+- Chaque orientation distincte possède exactement une écriture ; deux orientations distinctes n'ont jamais la même.
+- Les écritures redondantes sont acceptées en lecture et ramenées à leur forme canonique.
+- La casse est libre à la lecture ; les trois séparateurs sont acceptés.
+- Un `--` absent est déduit de la position ; un `--` placé là où aucun tour n'est passé est refusé.
+- Un coup impossible est refusé en indiquant son rang, son jeton et la raison, parmi les sept motifs listés.
+- Un refus n'applique rien : la position atteinte par le préfixe légal n'est ni restituée, ni modifiée.
 
-Cette première heuristique mesure des cases à conquérir et non des pièces ou des tours. Elle ignore volontairement les formes restantes, la gravité et les supports légaux. Le Minimax compare les joueurs avec `score adverse - score du joueur` et complète cette valeur par la différence entre leurs plus grandes zones.
+---
 
-### 5.9 Minimax
+### Histoire 7 — Jouer confortablement sur un téléphone
 
-Le moteur expose une sélection de coup pure, indépendante de React :
+*Lié au support : suppose un écran tactile étroit.*
 
-```ts
-chooseMinimaxMove(position, { depth: 2 })
-```
+**Pour qui, pourquoi** — pour deux joueurs qui se passent un téléphone. C'est le support le plus contraint : le plateau, deux réserves et les commandes doivent tenir sans que rien ne bouge sous le doigt.
 
-- la profondeur compte les poses futures, et vaut `2` par défaut afin d'examiner le coup de l'ordinateur puis la meilleure réponse adverse ;
-- chaque nœud énumère uniquement les coups légaux depuis `legalMoves.ts` ;
-- la simulation recalcule la chute, décrémente l'inventaire, détecte la victoire immédiate, les passes forcées et le blocage total ;
-- les nœuds de l'ordinateur maximisent le score et ceux de l'adversaire le minimisent ;
-- les résultats terminaux dominent toujours l'heuristique, avec une préférence pour une victoire plus rapide et une défaite plus tardive ;
-- les positions non terminales utilisent `100 × (distance adverse - distance ordinateur)`, puis la différence de taille des plus grandes zones comme départage ;
-- une distance infinie est remplacée par une valeur finie supérieure à toute distance possible avant la soustraction ;
-- appliquer l'élagage alpha-bêta, ordonner les coups racine par l'heuristique et utiliser une table de transposition qui distingue valeurs exactes, bornes basses et bornes hautes ;
-- retourner le coup, sa valeur et le nombre de nœuds explorés, ou `null` si aucun coup n'est disponible.
+**Ce que ça recouvre** — la disposition en une colonne, la permutation des réserves à chaque tour, les cibles tactiles, et la stabilité de la mise en page.
 
-Le moteur est branché dans l'interface : l'écran de configuration propose une partie contre l'ordinateur, qui tient alors les blancs et joue à la profondeur par défaut.
+**Disposition.** Le plateau occupe le haut de l'écran et reste l'élément le plus grand. Juste en dessous vient la réserve de celui qui joue ; en dessous encore, celle de l'adversaire, atténuée. À chaque tour les deux réserves **échangent leur place**, si bien que ses propres pièces sont toujours les plus proches du plateau. Cette permutation est en elle-même l'annonce du changement de tour ; elle est **aussi annoncée à voix haute**, en nommant le joueur et en disant quelle réserve devient jouable — un déplacement purement visuel n'existe pas pour qui ne voit pas l'écran.
 
-## 6. Plan de tests
+Chaque réserve montre ses sept formes sur **deux rangées**, sans rien à faire défiler latéralement. Les silhouettes sont petites, mais chaque exemplaire disponible occupe une zone tactile à la taille d'un doigt, nettement plus grande que le dessin qu'elle contient. Les exemplaires joués restent visibles en pointillé.
 
-### 6.1 Tests des pièces
+**Bande réservée.** Une bande sous le plateau est réservée en permanence à la pièce sélectionnée, à ses commandes de rotation et de retournement, aux messages de refus et, en fin de partie, à l'annonce du vainqueur. Sa hauteur ne dépend pas de son contenu : **rien ne bouge quand on choisit une pièce, quand un refus s'affiche, ni quand la partie se termine**.
 
-- les matrices correspondent exactement aux ASCII validés ;
-- chaque forme possède quatre, trois, deux ou une case selon le cas ;
-- l'inventaire initial contient deux exemplaires de chaque forme ;
-- total de 14 pièces et 42 cases par joueur ;
-- nombre d'orientations uniques : `1, 2, 2, 4, 4, 4, 8` ;
-- aucune orientation n'a de coordonnées négatives après normalisation ;
-- aucune orientation dupliquée.
+Sur un grand écran, la même matière se répartit en trois colonnes — une réserve, le plateau, l'autre réserve — les deux réserves restant visibles simultanément. La permutation n'a alors plus lieu d'être : le joueur au trait est désigné autrement, par une indication pointant vers sa réserve.
 
-### 6.2 Tests de chute et de support
+**Critères d'acceptation**
 
-- monomino sur grille vide : tombe au fond ;
-- domino horizontal sur grille vide : valide au fond ;
-- barre verticale : descend jusqu'au fond ;
-- dépassement horizontal à droite : interdit ;
-- colonne bouchée près du haut : dépassement supérieur interdit ;
-- une pièce s'arrête au premier obstacle et ne traverse jamais une case occupée ;
-- grand L reposant entièrement sur le fond : valide ;
-- T avec tige vers le bas sur sol vide : bras non soutenus, donc invalide ;
-- T retourné avec barre au fond : valide ;
-- pont au-dessus d'une case vide : invalide ;
-- surplomb dont toutes les faces inférieures sont soutenues : valide ;
-- ghost et validation définitive retournent les mêmes cases ;
-- une pose invalide ne modifie ni la grille, ni l'inventaire, ni le joueur actif.
+- Sur un écran de téléphone, aucun débordement horizontal de la page, en portrait comme en paysage.
+- Le plateau est le plus grand élément de l'écran et reste entièrement visible sans défilement.
+- La réserve du joueur au trait est celle qui touche le plateau ; celle de l'adversaire est en dessous et visiblement atténuée.
+- Un changement de tour permute les deux réserves et est annoncé, en nommant le joueur et sa réserve.
+- Les sept formes d'une réserve tiennent sur deux rangées, sans défilement latéral.
+- Chaque exemplaire disponible offre une cible tactile confortable au doigt, indépendamment de la taille de sa silhouette.
+- Sélectionner une pièce, tourner, essuyer un refus ou terminer la partie ne déplace jamais le plateau ni les réserves.
+- En plein écran installé, aucun contenu ne passe sous l'encoche ni sous la barre de gestes.
 
-### 6.3 Tests de coups disponibles et de passes
-
-- une grille vide offre des coups aux deux joueurs ;
-- une forme à compteur zéro n'est jamais énumérée ;
-- un joueur sans coup est passé automatiquement ;
-- une pose remet les passes consécutives à zéro ;
-- un joueur précédemment bloqué peut rejouer si la pose adverse crée un support ;
-- deux passes consécutives terminent la partie ;
-- une absence de coup suivie d'une pose ne termine pas la partie.
+---
 
-### 6.4 Tests de connexion
+### Histoire 8 — Donner aux pièces une matière lisible
 
-- connexion gauche-droite orthogonale ;
-- connexion haut-bas orthogonale ;
-- connexion composée uniquement de contacts diagonaux ;
-- deux zones séparées d'une case ne sont pas connectées ;
-- les couleurs adverses ne relient jamais deux zones ;
-- une composante touchant un seul bord ne gagne pas ;
-- calcul correct de la plus grande composante ;
-- victoire immédiate après le coup qui complète le chemin ;
-- reconstruction d'un chemin gagnant ordonné entre les deux bords, y compris pour un chemin uniquement diagonal.
-
-### 6.5 Tests d'évaluation de grille
-
-Isoler ces scénarios dans `evaluation.test.ts` et décrire les grilles sous forme textuelle avec `B` pour une case bleue, `W` pour une case blanche et `.` pour une case vide.
-
-- grille vide : score `9` pour les deux joueurs ;
-- liaison gagnante horizontale, verticale ou diagonale : score `0` ;
-- plusieurs zones séparées : somme minimale des cases vides nécessaires pour les raccorder aux bords ;
-- choix du meilleur axe lorsque les distances horizontale et verticale diffèrent ;
-- cases adverses infranchissables et score infini si aucun axe ne reste accessible ;
-- au moins deux positions mixtes issues de parties rejouées avec de vraies pièces et uniquement des poses légales, puis comparées à leur représentation textuelle avant l'évaluation.
-
-### 6.6 Tests du Minimax
-
-- refuser une profondeur inférieure à `1` ;
-- choisir immédiatement une pose gagnante depuis une position construite avec des coups légaux ;
-- simuler correctement une passe forcée et une fin par blocage total ;
-- jouer au moins 20 parties déterministes contre un adversaire aléatoire, en étant premier joueur dans la moitié des parties et second dans l'autre moitié ;
-- à profondeur `2`, gagner au moins 80 % de cet échantillon et obtenir strictement plus de victoires que de défaites.
-
-### 6.7 Tests d'interface
-
-- seule la réserve active est interactive ;
-- un premier clic sur une silhouette disponible sélectionne cet exemplaire ;
-- un clic sur l'autre exemplaire identique change la sélection sans tourner ;
-- un second clic sur le même exemplaire tourne ;
-- `Retourner` transforme le grand L en J et S en Z ;
-- chaque groupe de réserve conserve deux silhouettes individuellement cliquables tant qu'elles sont disponibles : deux pleines, puis une pleine et une pointillée, puis deux pointillées ;
-- aucun nom de forme ni badge `×1`/`×2` n'est visible ; les informations restent présentes dans les attributs ARIA ;
-- aucun rectangle ou séparateur permanent n'entoure les paires dans la réserve ;
-- aucun en-tête visible ne précède les réserves et le bandeau central indique le tour uniquement par une flèche gauche/droite ;
-- le survol ou la sélection d'une silhouette de réserve ne déplace aucun élément ;
-- la réserve blanche et ses silhouettes pleines ou pointillées restent nettement lisibles ;
-- sélectionner ou tourner une pièce ne modifie ni la géométrie de la réserve ni la position de la grille ;
-- la pièce sélectionnée et sa rotation apparaissent uniquement dans la zone fixe au-dessus de la grille ;
-- au premier clic, la pièce centrale possède exactement la même orientation que la silhouette choisie dans la réserve ;
-- les cellules d'une même pièce forment une silhouette continue dans la réserve, le ghost et la grille ;
-- les `L`/`J`, `S`/`Z` et `T` posés sont rendus comme une silhouette SVG unique, contour de l'union de leurs cases, sans bordure interne ni encoche dans les angles rentrants ;
-- une même forme a exactement le même contour dans la réserve, dans l'aperçu, dans le ghost et sur la grille : même retrait, même épaisseur de trait, seule la teinte distingue les deux joueurs ;
-- les pièces de réserve et les pièces jouées ont une taille visuelle équivalente ;
-- le ghost change avec la colonne et l'orientation ;
-- un ghost invalide explique le refus ;
-- au survol, la pièce suit le pointeur au-dessus de la grille et aucune rangée de flèches n'est affichée ; sans survol, les entrées n'affichent que des flèches, sans numéro visible ;
-- une pose valide change le joueur ;
-- une passe forcée est annoncée ;
-- le panneau final distingue connexion, blocage et égalité ;
-- le panneau final ne recouvre jamais le plateau ;
-- le passage à l'état final ne change pas la position verticale de la grille ;
-- une victoire par connexion surligne le chemin gagnant exact avec un contour transparent sans masquer ni éclaircir jusqu'au blanc la couleur des pièces ;
-- `Nouvelle partie` restaure exactement les inventaires et une grille vide.
-
-### 6.8 Tests du chargement par URL
-
-- accepter le format multiligne `B/W/.` des tests d'évaluation ;
-- accepter neuf lignes séparées par `/` et une chaîne compacte de 81 caractères ;
-- refuser toute autre dimension ou tout symbole inconnu ;
-- charger le joueur actif demandé et démarrer directement la partie ;
-- regrouper les composantes orthogonales monochromes pour obtenir des silhouettes SVG continues ;
-- détecter une position déjà gagnante et afficher immédiatement le résultat et son chemin ;
-- refuser deux vainqueurs simultanés ou un joueur actif inconnu.
-
-### 6.9 Vérification navigateur
-
-Après `npm test`, `npm run lint` et `npm run build`, contrôler dans un vrai navigateur, sur un viewport bureau et un viewport mobile :
-
-- sélection et rotations de chaque forme ;
-- miroir L/J et S/Z ;
-- plusieurs poses valides ;
-- refus d'un trou ;
-- refus d'un dépassement ;
-- victoire horizontale ;
-- victoire verticale ou diagonale ;
-- position verticale identique de la grille juste avant et juste après la victoire ;
-- passage visuel d'une réserve de deux silhouettes pleines à une pleine et une pointillée, puis deux pointillées ;
-- stabilité de la grille et de la réserve pendant sélection, rotation et retournement ;
-- rendu propre d'un `L`/`J`, d'un `S`/`Z` et d'un `T` posés ;
-- continuité des silhouettes dans la réserve, le ghost et la grille ;
-- panneau final non modal et surlignage du chemin gagnant ;
-- absence de débordement horizontal sur tablette et mobile ;
-- passe forcée ;
-- chargement direct d'une position non vide et d'une position gagnante avec `?board=...&turn=...` ;
-- nouvelle partie.
-
-## 7. Critères d'acceptation
-
-Le développement est terminé lorsque :
-
-- la grille comporte exactement 9×9 cases ;
-- chaque joueur commence avec deux exemplaires des sept topologies validées ;
-- les rotations et miroirs autorisés sont corrects ;
-- le ghost et la pose utilisent la même logique ;
-- aucun chevauchement, dépassement ou vide sous une pièce n'est accepté ;
-- une pose invalide ne consomme rien ;
-- les connexions par côtés et angles sont reconnues ;
-- les victoires gauche-droite et haut-bas sont détectées immédiatement ;
-- les passes et le blocage total suivent les règles ;
-- le Minimax choisit uniquement des coups légaux, reconnaît les résultats terminaux et dépasse le seuil statistique défini contre le joueur aléatoire ;
-- les deux réserves et le joueur actif sont clairement visibles ;
-- chaque réserve conserve deux silhouettes par forme, individuellement sélectionnables lorsqu'elles sont disponibles et pointillées lorsqu'elles sont jouées, sans nom ni badge numérique visible ;
-- les réserves n'utilisent pas de rectangles permanents autour des paires, et les pièces blanches restent contrastées ;
-- la pièce sélectionnée et ses rotations sont affichées à la même échelle que dans la réserve dans une zone fixe au-dessus de la grille sans déplacer le plateau ni transformer les silhouettes de réserve ;
-- les pièces ont une silhouette continue et une taille visuelle cohérente entre réserve, ghost et plateau ;
-- les `L`/`J`, `S`/`Z` et `T` ne présentent aucune encoche dans leurs angles rentrants ni aucun artefact de jonction ;
-- les entrées de colonnes ne montrent que les flèches ;
-- aucun nom de pièce, angle de rotation ou aperçu redondant n'encombre la zone centrale ;
-- le panneau de fin ne recouvre pas la grille et le chemin gagnant exact est surligné sans altérer la couleur du joueur ;
-- la partie est jouable intégralement à la souris et raisonnablement au clavier ;
-- tests, lint et build passent ;
-- la SPA ne dépend d'aucun serveur.
-
-## 8. Décisions UX appliquées
-
-1. **Égalité après blocage total** : déclarer un match nul.
-2. **Premier joueur** : écran de configuration bleu/blanc avec rappel « le plus jeune commence » ; bleu sélectionné par défaut.
-3. **Convention de colonne** : la colonne visée porte le centre de la matrice normalisée, jamais l'ancre de sa case la plus à gauche, et la pièce est retenue contre les bords du plateau.
-4. **Contrôle du miroir** : bouton `Retourner` et touche `F`, en plus du clic répété qui reste réservé à la rotation.
-5. **Inventaire** : toujours deux silhouettes par forme, chacune sélectionnable séparément lorsqu'elle est disponible et exactement la silhouette jouée devient pointillée, sans nom ni multiplicateur visible et sans rectangle permanent autour des paires.
-6. **Fin de partie** : panneau compact non modal au-dessus de la grille et chemin gagnant surligné.
-7. **Densité visuelle** : supprimer les numéros de colonnes, le nom et l'angle de la sélection, les légendes de bords et les textes permanents redondants.
-8. **Sélection** : aperçu à l'échelle des réserves et rotations dans une zone centrale fixe ; la grille et les réserves ne bougent pas et la géométrie canonique de la réserve ne tourne jamais.
-9. **Contraste** : fond gris bleuté pour la réserve blanche et contour externe sombre pour ses pièces.
-10. **Tour actif** : aucune en-tête de réserve ; une flèche gauche/droite dans le bandeau central pointe vers la réserve du joueur actif.
-11. **Rendu du plateau** : une silhouette SVG globale par pièce, tracée comme le contour de l'union de ses cases puis rentrée d'un retrait constant, élimine les encoches des L, S et T ; réserve et grille partagent ce chemin et le même trait ; le chemin victorieux reçoit seulement un contour transparent qui préserve la couleur du joueur.
-12. **Fixtures visuelles** : une query string `board` au format commun `B/W/.`, complétée éventuellement par `turn`, charge directement une position ; une victoire préexistante ouvre son état final.
-
-Ces décisions font partie de la spécification et doivent être reproduites telles quelles.
-
-## 9. Hors périmètre initial
-
-Ne pas ajouter sans demande explicite :
-
-- jeu en réseau ;
-- comptes utilisateurs ;
-- backend ou base de données ;
-- matchmaking ;
-- chronomètre compétitif ;
-- historique persistant ;
-- effets sonores complexes.
-
-Une fonction d'annulation n'est pas recommandée dans la première version, car le jeu physique ne permet normalement pas de reprendre une pièce une fois jouée.
+**Pour qui, pourquoi** — pour que le plateau se lise d'un coup d'œil : reconnaître une pièce, distinguer deux voisines de même couleur, et voir la grille au travers.
+
+**Ce que ça recouvre** — l'apparence des pièces, dans la réserve, dans l'aperçu de sélection, dans l'aperçu de chute et sur le plateau.
+
+**La matière.** Chaque pièce est une dalle de plexiglas teinté, épaisse et polie, posée à plat dans le plateau. On voit le quadrillage au travers : la couleur est un **filtre**, pas un aplat. La tranche est plus dense que le corps, et c'est elle qui détache deux pièces voisines de même couleur.
+
+**La lumière appartient à l'écran, jamais à la pièce.** Une lumière unique éclaire toute la scène depuis le haut à gauche, avec une ombre courte, si bien que la pièce a l'air de reposer dans le plateau. Tourner ou retourner une pièce fait pivoter **sa forme, pas son reflet** : l'éclairage est ancré sur le plateau, pas sur la pièce. Corollaire : une orientation doit être décrite par les cases qu'elle occupe, jamais obtenue en faisant tourner un dessin déjà éclairé.
+
+**Une pièce est une dalle, pas un assemblage de carrés.** Aucune case d'une même pièce ne doit se distinguer de ses voisines. La silhouette est le contour de l'**union** de ses cases, sans aucune arête interne : dans le creux d'un `L`, d'un `T` ou d'un `S`, aucune encoche ni artefact de jonction ne doit apparaître. Empiler un dessin par case produit exactement ce défaut et doit être évité.
+
+C'est aussi une contrainte d'échelle, et c'est le piège principal : une pièce est un polyomino, ses divisions internes tombent donc exactement sur la grille. **Tout effet de matière dont la portée avoisine la taille d'une case s'aligne sur ces divisions et fait lire la pièce comme un patchwork de carrés.** Les seules échelles sûres sont très en dessous de la case — les liserés de tranche — ou très au-dessus — le reflet, étalé sur tout le plateau.
+
+Une même forme présente exactement le même contour, le même retrait et la même épaisseur de trait dans la réserve, dans l'aperçu de sélection, dans l'aperçu de chute et sur le plateau ; seule la teinte distingue les deux joueurs. Une pièce en attente de pose est plus transparente et plane au-dessus du plateau. Un exemplaire déjà joué reprend le même contour, en pointillé et sans remplissage.
+
+**Critères d'acceptation**
+
+- Les cases d'une même pièce forment une silhouette continue, sans bordure interne, dans la réserve, dans l'aperçu et sur le plateau.
+- Un `L`, un `J`, un `S`, un `Z` et un `T` posés ne présentent aucune encoche dans leurs angles rentrants.
+- Aucune case d'une pièce ne se distingue de ses voisines par sa teinte ou sa luminosité, y compris sur une barre de trois.
+- Le quadrillage du plateau reste visible à travers les pièces.
+- Deux pièces distinctes de même couleur, adjacentes, restent visuellement séparables par leur tranche.
+- Tourner ou retourner une pièce ne déplace pas son reflet ni son ombre : la lumière vient toujours du haut à gauche.
+- Une même forme a le même contour et la même épaisseur de trait dans les quatre contextes d'affichage.
+- Les pièces blanches restent nettement lisibles sur le fond du plateau et sur celui de leur réserve.
+- Une pièce en attente de pose se distingue d'une pièce posée par sa transparence.
+
+---
+
+### Histoire 9 — Célébrer la victoire et montrer le chemin
+
+**Pour qui, pourquoi** — pour que le gagnant voie **pourquoi** il a gagné : quelle chaîne de pièces relie les deux bords, et par où elle passe.
+
+**Ce que ça recouvre** — le tracé du chemin gagnant, la célébration, et leur comportement quand le joueur a demandé moins d'animations.
+
+**Le chemin.** Au moment où la connexion se referme, un chemin lumineux court sur le plateau. Il part du bord d'où vient la victoire — de la **gauche** pour une liaison horizontale, du **bas** pour une verticale — et remonte la chaîne case après case, virages arrondis compris, jusqu'à toucher le bord opposé. Il se prolonge jusqu'aux deux bords : sans cela, il s'arrêterait au centre de la première et de la dernière case et ne montrerait pas que les bords sont bien reliés.
+
+Il **ne colorie rien** : il glisse par-dessus les pièces, cerné d'un liseré sombre qui le garde net sur les deux couleurs. Là où la connexion passe en diagonale, le trait file en oblique, ce qui rend le trajet exact lisible d'un coup d'œil.
+
+Le chemin est un vrai chemin dans la zone gagnante, reconstruit avec la **même** connectivité à huit voisins que la détection de victoire : il peut donc comporter des pas diagonaux. Quand plusieurs chemins existent, n'importe lequel convient, mais la reconstruction doit être déterministe. Le chemin horizontal est cherché en premier ; le vertical seulement s'il n'en existe aucun.
+
+**La célébration.** Pendant que le chemin se dessine, des gerbes d'étincelles éclatent au-dessus du plateau et s'éteignent en quelques secondes. Elles ne cachent jamais la position ni le panneau du vainqueur, ne captent aucun clic, et se terminent d'elles-mêmes au lieu de tourner en boucle.
+
+**Moins d'animations.** Pour qui a exprimé cette préférence au niveau du système, tout arrive d'emblée à son état final : le chemin est affiché entièrement tracé, et **les étincelles ne sont pas jouées du tout** — une célébration est précisément le genre d'effet à ne pas accélérer.
+
+**Critères d'acceptation**
+
+- Une victoire horizontale trace le chemin depuis le bord gauche ; une victoire verticale depuis le bord bas.
+- Le tracé relie effectivement les deux bords opposés, prolongements compris.
+- Un chemin comportant des pas diagonaux est tracé en oblique et non en escalier.
+- Le tracé n'altère ni la couleur, ni la lisibilité des pièces qu'il traverse, bleues comme blanches.
+- Le tracé reste lisible sur les deux couleurs de pièces.
+- Les étincelles ne recouvrent ni le plateau ni le panneau de fin, et disparaissent seules.
+- Sous préférence de mouvement réduit, le chemin s'affiche immédiatement dans son état final et aucune étincelle n'est jouée.
+- La reconstruction du chemin est déterministe : la même position gagnante donne toujours le même tracé.
+
+---
+
+### Histoire 10 — Jouer contre l'ordinateur
+
+**Pour qui, pourquoi** — pour jouer seul, à une force choisie, sans attendre.
+
+**Ce que ça recouvre** — le choix du niveau avant la partie, le tour de l'ordinateur, et le budget de réflexion.
+
+**Les niveaux.** L'écran de départ de l'histoire 2 propose désormais deux modes : à deux joueurs sur le même écran, ou contre l'ordinateur. Avant de lancer une partie contre l'ordinateur, le joueur choisit son niveau : **débutant**, **confirmé** ou **expert**. Le débutant joue au coup par coup et laisse passer les menaces. Le confirmé, proposé par défaut, anticipe la réponse de son adversaire. L'expert pousse son analyse plus loin dès que le plateau se resserre. Le choix vaut pour toute la partie ; une nouvelle partie repart du niveau par défaut.
+
+Le joueur humain tient les bleus, l'ordinateur les blancs. Qui ouvre reste tiré au sort.
+
+**Le budget de réflexion prime sur la profondeur.** Quel que soit le niveau, l'ordinateur annonce qu'il réfléchit et répond en une ou deux secondes : la partie ne s'interrompt jamais sur une attente, y compris sur téléphone. Le **pire cas est l'ouverture** : le plateau vide offre 95 coups légaux, et chaque niveau d'anticipation supplémentaire multiplie le travail par ce facteur de branchement. Un niveau fixe donc une profondeur **visée**, pas une promesse d'attente : tant que la position reste large, l'analyse s'arrête plus tôt ; elle va au bout quand le plateau se resserre, c'est-à-dire là où l'anticipation décide de la partie. Valeur de référence : au-delà de **24** coups légaux, l'anticipation est ramenée à un tour de réponse. Ce seuil se règle sur la machine cible, la contrainte tenable étant le temps, pas le nombre.
+
+**Ce que l'ordinateur cherche.** Une position se juge d'abord par la distance qui sépare chaque joueur de la victoire : le nombre minimal de cases encore à conquérir pour relier une paire de bords opposés, en traversant ses propres cases sans coût, les cases vides à l'unité, et sans jamais traverser une case adverse, avec le même voisinage à huit cases que la victoire. Une grille vide vaut ainsi 9, une grille gagnante 0, une position dont les deux axes sont coupés vaut l'infini. L'ordinateur maximise l'écart entre la distance de son adversaire et la sienne, et départage à égalité par la différence des plus grandes zones. Une partie terminée domine toujours cette estimation, avec une préférence pour une victoire plus rapide et une défaite plus tardive.
+
+Cette évaluation est **indicative** : c'est une heuristique qui fonctionne, pas une obligation. Ce qui est exigé, ce sont les niveaux perçus et le temps de réponse.
+
+**Retour au joueur.** L'ordinateur annonce qu'il réfléchit avant de chercher, pas après. La pièce qu'il vient de poser est mise en évidence quelques secondes : sans cela le plateau change tout seul et le joueur ne voit pas ce qui s'est passé.
+
+**Critères d'acceptation**
+
+- Le niveau se choisit avant le lancement de la partie et reste inchangé jusqu'à sa fin.
+- Sans choix explicite, la partie démarre au niveau intermédiaire ; une nouvelle partie y revient.
+- Le niveau expert produit un jeu au moins aussi fort que le niveau confirmé, lui-même plus fort que le débutant.
+- L'ordinateur ne joue que des coups légaux et ne consomme que des pièces qu'il possède encore.
+- L'ordinateur reconnaît un coup qui gagne immédiatement et le joue.
+- Le message d'attente est visible **avant** que la recherche commence, pas après.
+- Aucune position ne fait attendre plus de deux secondes, ouverture comprise, sur un appareil modeste.
+- La pièce que vient de poser l'ordinateur est mise en évidence assez longtemps pour être repérée.
+- Un coup de l'ordinateur hors de son tour est ignoré ; une pose manuelle pendant son tour est ignorée.
+- L'ordinateur ne passe jamais par le circuit de sélection du joueur humain : la réserve blanche n'est jamais interactive.
+- Tout se calcule sur l'appareil : aucun appel réseau n'est nécessaire pour jouer un coup.
+
+---
+
+### Histoire 11 — Demander conseil
+
+**Pour qui, pourquoi** — pour apprendre le jeu, ou se débloquer sur une position fermée, sans quitter la partie.
+
+**Ce que ça recouvre** — une commande « Conseil » disponible quand c'est à vous de jouer, et l'affichage éphémère du coup recommandé.
+
+Le jeu montre **d'un même geste** la pièce à prendre dans votre réserve et l'emplacement précis où la poser, déjà tournée dans le bon sens. Les deux ensemble : l'une sans l'autre ne servirait à rien. L'exemplaire mis en évidence dans la réserve est celui que la pose consommerait réellement.
+
+La suggestion s'efface **dès que vous touchez à quoi que ce soit** ou que la main passe à l'adversaire. Rien ne reste affiché en permanence : une partie à deux n'est donc jamais éventée. Une action refusée, elle, ne change rien et laisse donc le conseil en place — c'est cohérent, rien ne s'est passé.
+
+Le conseil vise toujours la force la plus haute, indépendamment du niveau choisi pour l'adversaire : un conseil calculé au niveau débutant recommanderait un coup qu'on ne souhaite conseiller à personne. Il reste soumis au même budget de réflexion que l'histoire 10, et n'est donc jamais plus lent.
+
+**Critères d'acceptation**
+
+- La commande n'est proposée que pendant qu'un humain a la main dans une partie en cours.
+- Elle n'est proposée ni pendant que l'ordinateur réfléchit, ni une fois la partie terminée, ni avant qu'elle commence.
+- Le conseil désigne simultanément une pièce de la réserve et les cases exactes où elle atterrirait.
+- L'orientation montrée est celle qu'il faut jouer, sans que le joueur ait à la retrouver.
+- L'exemplaire mis en évidence est celui que la pose consommerait effectivement.
+- Le conseil ne propose jamais une forme dont les deux exemplaires sont joués.
+- Aucun conseil n'est rendu si le joueur au trait n'a plus aucun coup légal.
+- Demander conseil ne modifie ni le plateau, ni les réserves, ni le joueur au trait, ni la sélection en cours.
+- Deux demandes sur une même position rendent le même conseil.
+- Le conseil disparaît à la première action du joueur et au changement de joueur.
+- Un état d'attente est visible pendant la recherche.
+
+---
+
+### Histoire 12 — Installer le jeu et y jouer hors ligne
+
+*Lié au support : suppose une plateforme où une application web s'installe.*
+
+**Pour qui, pourquoi** — pour retrouver le jeu sur son écran d'accueil et y jouer dans le métro.
+
+**Ce que ça recouvre** — l'installation sur l'appareil et la disponibilité hors ligne.
+
+Le jeu s'ajoute à l'écran d'accueil comme une application : une icône, un nom, un lancement en plein écran, sans compte ni magasin d'applications. Après une première visite, il reste disponible **sans connexion**, adversaire ordinateur compris, puisque tout se calcule sur l'appareil.
+
+La dernière version est servie dès que le réseau revient : le joueur ne doit jamais rester bloqué sur une version ancienne. Hors ligne, la partie en cours **n'est pas conservée** d'une session à l'autre : c'est le jeu qui est disponible, pas l'état de la partie. Un joueur qui veut garder une position en cours utilise la notation de l'histoire 6.
+
+**Critères d'acceptation**
+
+- Le jeu est proposé à l'installation et se lance en plein écran, avec son icône et son nom.
+- Après une première visite complète, le jeu se lance et se joue entièrement sans connexion, partie contre l'ordinateur comprise.
+- Aucun compte n'est demandé à aucun moment.
+- Une version plus récente est prise en compte dès le retour du réseau, sans intervention du joueur.
+- Une coupure réseau en cours de partie n'interrompt pas la partie.
+- L'état de la partie n'est pas restauré après fermeture ; le jeu redémarre sur son écran de départ.
+
+---
+
+## Hors périmètre
+
+Ne pas ajouter sans demande explicite : jeu en réseau, comptes, backend ou base de données, matchmaking, chronomètre, historique persistant, effets sonores.
+
+L'annulation d'un coup n'est pas prévue : le jeu physique ne permet pas de reprendre une pièce posée. La notation de partie couvre le besoin de revenir à une position antérieure.

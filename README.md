@@ -107,31 +107,24 @@ Les tests vivent à côté de leur module, en `*.test.ts` / `*.test.tsx`.
 - `minimax.ts` traduit seul un niveau en profondeur : `DIFFICULTY_DEPTHS` donne la profondeur visée, `getAffordableDepth` l'abaisse tant que la position offre trop de coups légaux, et `chooseMoveForDifficulty` enchaîne les deux pour le joueur au trait. L'interface transmet un niveau, jamais une profondeur.
 - `hint.ts` conseille le joueur au trait en réutilisant la recherche existante : `chooseHint` délègue à `chooseMoveForDifficulty` et hérite donc du plafond adaptatif, sans second mécanisme de budget. Il ne réimplémente ni l'énumération des coups ni l'évaluation. `canOfferHint` dit à lui seul quand la commande a un sens — partie en cours et joueur au trait humain.
 - Le conseil est rattaché dans `App.tsx` à l'**état exact** pour lequel il a été demandé, jamais à un drapeau. Toute action produit un nouvel état, donc la demande en cours et le conseil affiché cessent d'y correspondre et disparaissent sans qu'aucun effet n'ait à les nettoyer, y compris si le joueur agit pendant la recherche. Une action refusée renvoie l'état inchangé et laisse le conseil en place, ce qui est le comportement voulu.
-- La mise en évidence du conseil est un mécanisme **distinct** du chemin gagnant : classes, calque et teinte propres. Le chemin gagnant reste un contour transparent sur des pièces posées ; le conseil désigne des cases vides et porte un fond. Ne pas fondre les deux rendus.
+- La mise en évidence du conseil est un mécanisme **distinct** du chemin gagnant : classes, calque et teinte propres. Ne pas fondre les deux rendus.
 - L'état de survol, les délais et les animations restent dans l'UI tant qu'ils n'affectent pas les règles.
 
 ### Ordre des réserves et mise en page
 
 `App.tsx` rend le plateau d'abord, puis les deux réserves **dans l'ordre du tour**, la réserve du joueur actif en tête. L'ordre du DOM est donc toujours l'ordre visuel, y compris pour un lecteur d'écran ou une tabulation.
 
-- Sur trois colonnes, cet ordre ne doit rien décider : `App.css` pose chaque réserve sur la colonne de sa couleur avec `grid-area`, la bleue à gauche comme l'annonce la flèche du bandeau. Ne pas revenir à un placement automatique, il suivrait le tour.
-- En une seule colonne, la permutation des deux réserves porte le tour à elle seule : le bandeau visuel y est supprimé, il répétait cette information au prix de 88px de haut. Le signal reste doublé pour qui ne le voit pas — la région `aria-live` du bandeau, elle, est conservée et continue d'annoncer le changement. Une permutation muette serait invisible pour un lecteur d'écran ; ne pas retirer cette région en même temps que le bandeau.
-- Sur trois colonnes en revanche, les réserves sont ancrées par couleur et ne permutent jamais : le bandeau y est le seul indicateur de tour et doit rester.
+- Sur trois colonnes, cet ordre ne doit rien décider : `App.css` pose chaque réserve sur la colonne de sa couleur avec `grid-area`. Ne pas revenir à un placement automatique, il suivrait le tour.
+- En une seule colonne, le bandeau visuel est supprimé mais sa région `aria-live` est conservée : elle seule annonce alors le changement de tour. Ne pas retirer cette région en même temps que le bandeau.
 - Les sélecteurs `.play-area + .piece-tray` et `.piece-tray + .piece-tray` désignent respectivement la réserve active et l'adverse. Ils tiennent de l'ordre du DOM, donc aucune classe d'état n'est à câbler côté React.
-- La réserve empilée est une grille de sept colonnes — un groupe de forme par colonne, les deux exemplaires empilés. `--piece-cell` s'y déduit de la largeur de colonne : la silhouette rétrécit, la cible tactile reste à 44px. Ne pas réintroduire de défilement horizontal dans la réserve.
+- Dans la réserve empilée, `--piece-cell` se déduit de la largeur de colonne : la silhouette rétrécit, la cible tactile reste à 44px.
 
-### Hauteur au-dessus du plateau, sur téléphone
-
-Le plateau est l'élément principal : sur téléphone il commence immédiatement sous l'en-tête et **son bord haut ne bouge jamais**, ni à la sélection, ni à la rotation, ni à la victoire. Deux blocs de hauteur variable le menaçaient et sont traités séparément :
+### Variables de mise en page du téléphone
 
 - `play-head` — le bandeau et l'aperçu de la pièce sélectionnée — est regroupé dans un conteneur et renvoyé **sous** le plateau par `order`. L'ordre du DOM est inchangé, si bien que `Tourner`/`Retourner` précèdent toujours les flèches de colonne à la tabulation.
-- Sa hauteur y est **réservée en permanence** (`--head-height`), pièce sélectionnée ou non. Choisir une pièce ne doit rien déplacer, et surtout pas la réserve que le doigt vient de toucher. Ne pas la rendre escamotable pour gagner de la place : c'est un arbitrage explicite en faveur de la stabilité.
-- La valeur est calée sur le contenu réel — trois cases d'aperçu — et non sur les 150px du bureau. Le panneau de fin de partie vient s'afficher dans cette même zone déjà payée, sur toute la largeur : rien ne bouge non plus à la victoire. Sur les écrans les plus étroits, un panneau de blocage très bavard peut la dépasser de quelques pixels ; la partie est alors finie et plus rien n'est à cliquer dans les réserves.
-- La rangée se découpe en trois colonnes symétriques : message à gauche, aperçu centré sur la largeur du plateau, commandes contre le bord droit. Les deux commandes sont côte à côte et non empilées — c'est ce qui permet de tenir deux cibles de 44px dans une rangée de 84.
-- Le bouton de conseil vit dans la colonne de gauche, avec le message, empilés et calés en bas. C'est la seule colonne au contenu variable : les deux autres ont une géométrie fixe, donc ni l'aperçu ni les commandes de rotation ne bougent quand le conseil apparaît ou disparaît en cours de partie. Toute nouvelle commande de ce genre a sa place ici, pas ailleurs.
-- Le message est tronqué à deux lignes dans cette colonne étroite, sinon il pousserait la rangée et donc les réserves. Le texte complet reste annoncé : la région `aria-live` ne dépend pas de ce qui est peint. Les libellés doivent donc porter leur sens dans leur premier membre de phrase.
+- `--head-height` réserve la hauteur de ce conteneur en permanence, pièce sélectionnée ou non, et le panneau de fin de partie s'affiche dans cette même zone. Le bord haut du plateau ne doit bouger ni à la sélection, ni à la rotation, ni à la victoire.
 - La rangée de flèches de dépôt ne réserve plus de hauteur : elle se **superpose** au haut du plateau, alignée sur ses colonnes par `--board-inset`, qui vaut la somme marge du cadre + bordure + marge intérieure. Modifier l'un de ces trois padding sans mettre `--board-inset` à jour désaligne les flèches.
-- Cette superposition est réservée au téléphone. Au-delà, le pointeur sait survoler et cette bande est le prolongement haut de la surface de visée : elle doit rester au-dessus du plateau pour qu'on puisse l'approcher par le haut.
+- Cette superposition est réservée au téléphone : au-delà, la bande reste au-dessus du plateau, dont elle prolonge la surface de visée au survol.
 
 ### Zone sûre iOS
 
