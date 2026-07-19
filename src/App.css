@@ -300,8 +300,8 @@
    le mouvement en cours était rendu. Le tout tombe de lui-même sous
    `prefers-reduced-motion`, qui rétablit le remplacement instantané. */
 .piece-turn { display: grid; place-items: center; }
-.piece-turn--rotate { animation: piece-turns 220ms cubic-bezier(.2,.75,.25,1); }
-.piece-turn--flip { animation: piece-flips 260ms cubic-bezier(.35,0,.25,1); }
+.piece-turn--rotate { animation: piece-turns 220ms ease-out; }
+.piece-turn--flip { animation: piece-flips 260ms ease-out; }
 
 @keyframes piece-turns { from { transform: rotate(-90deg); } }
 @keyframes piece-flips { from { transform: perspective(30rem) rotateY(180deg); } }
