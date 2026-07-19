@@ -551,19 +551,6 @@
      celui des deux joueurs qui passe en premier. */
   .piece-tray + .piece-tray { border-top: 1px solid #d2d5db; }
 
-  /* Sept groupes en colonnes, les deux exemplaires empilés : c'est la seule
-     disposition qui tienne en deux rangées sans défilement dès 320px, et celle
-     qui laisse la plus large zone tactile à chaque silhouette.
-
-     Les colonnes sont en `auto`, donc calées sur la largeur de leur forme — de
-     une à trois cases — et non toutes égales : sept colonnes égales se règlent
-     sur la plus large et noient le mono dans du vide pendant que les pièces de
-     trois cases touchent presque leurs voisines. `justify-content` vaut
-     `normal`, ce qui répartit **également** l'espace restant entre les colonnes
-     `auto` : chaque silhouette reçoit ainsi la même marge, quelle que soit sa
-     largeur. Ne pas fixer `justify-content` ici, cette répartition tomberait et
-     tout se tasserait à gauche. La gouttière de colonne est nulle pour la même
-     raison : c'est cette répartition qui écarte les pièces. */
   .piece-list {
     width: min(100%, 560px);
     min-width: 0;
