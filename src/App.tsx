@@ -131,6 +131,7 @@ function App() {
           activePlayer: state.activePlayer,
         },
         state.difficulty,
+        Math.random,
       )
       if (!decision) return
       const { shapeId, orientation, column } = decision.move
@@ -263,9 +264,9 @@ function App() {
       <div className="game-layout">
         <section className="play-area">
           {/* Bandeau et aperçu de sélection sont empilés au bureau et côte à
-              côte en une colonne : ce conteneur laisse la mise en page choisir,
-              sans que la hauteur réservée à l'aperçu creuse un vide au-dessus du
-              plateau sur un écran de téléphone. */}
+              côte en une colonne : ce conteneur laisse la mise en page choisir
+              sans changer l'ordre, qui reste celui du geste — la pièce en main
+              se montre au-dessus du plateau, du côté par lequel elle tombe. */}
           <div className="play-head">
             <div className="play-banner">
               {state.phase === 'finished' && state.result ? (

@@ -197,9 +197,13 @@
 .game-layout > .piece-tray--white { grid-area: 1 / 3; }
 
 /* Trays */
-.piece-tray { padding: 1.4rem 0.8rem; border-color: #d2d5db; background: #efefec; }
+/* Les deux fonds ne diffèrent qu'en trois colonnes, où ils tiennent lieu de
+   côtés : la réserve est alors un bord de l'écran et sa teinte dit de qui elle
+   est. Empilées, les réserves n'ont plus de côté à distinguer — d'où la variable,
+   que la disposition en une colonne ramène à un fond unique. */
+.piece-tray { --tray-bg: #efefec; padding: 1.4rem 0.8rem; border-color: #d2d5db; background: var(--tray-bg); }
 .piece-tray--blue { border-right: 1px solid #d2d5db; }
-.piece-tray--white { border-left: 1px solid #c7ccd3; background: #e2e5e9; }
+.piece-tray--white { --tray-bg: #e2e5e9; border-left: 1px solid #c7ccd3; }
 .piece-list { display: grid; gap: 0.45rem; }
 
 .piece-row { display: flex; min-height: 54px; align-items: center; justify-content: center; gap: 10px; }
@@ -524,16 +528,25 @@
 
   .play-area { padding-top: 1rem; }
 
-  /* Le trait sépare la réserve de ce qui la précède : il reste juste quel que
-     soit celui des deux joueurs qui passe en premier. `container-type` fait de
-     la réserve le conteneur dont dépend la taille de case, plus bas. */
+  /* Un seul fond pour les deux réserves, celui que porte déjà `.piece-tray` :
+     empilées, elles se lisent comme une même surface, et leur permutation ne
+     fait plus glisser deux teintes l'une sur l'autre à chaque tour. L'écart
+     d'opacité suffit à désigner l'adverse.
+     `container-type` fait de la réserve le conteneur dont dépend la taille de
+     case, plus bas. */
   .piece-tray {
     min-width: 0;
     padding: 0.6rem 5px;
     border: 0;
-    border-top: 1px solid #d2d5db;
     container-type: inline-size;
   }
+  .piece-tray--white { --tray-bg: #efefec; }
+  /* Le trait ne sépare que les deux réserves l'une de l'autre. Contre la zone de
+     jeu il n'a rien à découper : le changement de fond dit déjà où finit le
+     plateau, et le trait y ajoutait une ligne de plus sous un cadre qui en porte
+     déjà. `.piece-tray + .piece-tray` désigne la réserve adverse quel que soit
+     celui des deux joueurs qui passe en premier. */
+  .piece-tray + .piece-tray { border-top: 1px solid #d2d5db; }
   .piece-tray:last-child { padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px)); }
 
   /* Sept groupes en colonnes, les deux exemplaires empilés : c'est la seule
@@ -601,9 +614,10 @@
   from { opacity: 0.2; transform: translateY(-8px); }
 }
 
-/* L'aperçu s'ouvre sous le plateau au premier appui sur une pièce. Le plateau ne
-   bouge pas ; seules les réserves glissent, et ce fondu court signale d'où vient
-   le déplacement. Neutralisé par `prefers-reduced-motion`. */
+/* L'aperçu s'ouvre au-dessus du plateau au premier appui sur une pièce. La place
+   lui étant réservée en permanence, rien ne bouge : ce fondu court est le seul
+   signal que la pièce est passée en main. Neutralisé par
+   `prefers-reduced-motion`. */
 @keyframes selection-opens {
   from { opacity: 0; }
 }
@@ -619,25 +633,17 @@
   /* Bande de visée au doigt, et cadre de plateau resserré : les flèches se
      réalignent d'elles-mêmes sur les colonnes du damier. */
   .play-area { --drop-zone-height: 44px; --board-inset: 14px; padding: 0.7rem 0.55rem 0.6rem; }
-  /* Le plateau passe en tête de la colonne et n'en bouge plus : l'en-tête est
-     renvoyé sous lui. L'ordre du DOM reste inchangé, donc « Tourner » et
-     « Retourner » précèdent toujours les flèches de colonne à la tabulation, ce
-     qui est l'ordre du geste. */
-  .board-frame { order: 2; }
-  .drop-zones,
-  .drop-zones-spacer { order: 1; }
-  .play-head { order: 3; }
-
   /* Plus de bandeau de tour : en une colonne, c'est la réserve du joueur actif
      qui passe en premier, et ce déplacement dit déjà à qui de jouer. Restent le
      message d'erreur, l'aperçu et le panneau de fin — et surtout l'annonce
      `aria-live`, qui ne coûte aucun pixel : la permutation est un signal muet,
      elle ne peut pas être le seul.
 
-     La hauteur de la rangée est réservée en permanence, pièce sélectionnée ou
-     non : choisir une pièce ne doit rien déplacer, et surtout pas la réserve que
-     le doigt vient de toucher. Elle est calée sur le contenu réel — trois cases
-     d'aperçu — et non sur les 150px du bureau.
+     La rangée précède le plateau, comme au bureau : la pièce en main se montre
+     du côté par lequel elle va tomber. Sa hauteur est donc **fixe** et non
+     seulement minimale — le bord haut du plateau est en dessous, et le moindre
+     débordement de contenu le pousserait. Elle est calée sur le contenu réel —
+     trois cases d'aperçu — et non sur les 150px du bureau.
      Trois colonnes symétriques : le message à gauche, l'aperçu centré sur la
      largeur du plateau, les commandes contre le bord droit. */
   .play-head {
@@ -645,7 +651,7 @@
     --preview-cell: calc((var(--head-height) - 6px) / 3);
 
     display: grid;
-    min-height: var(--head-height);
+    height: var(--head-height);
     align-items: center;
     gap: 6px;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -682,6 +688,14 @@
      porte sur l'aperçu et non sur une réserve vide : le bouton de conseil vit
      désormais dans cette même réserve sans occuper la colonne centrale. */
   .play-head:not(:has(.selected-piece-preview)) .play-banner { grid-column: 1 / -1; }
+  /* Le message se centre alors sur la rangée entière, au lieu de rester calé sur
+     une colonne de gauche devenue inutile : c'est ainsi que « L'ordinateur
+     réfléchit… » se lit, au milieu de la zone qui portait la pièce. Il ne se
+     centre en hauteur que faute de bouton de conseil sous lui — sinon il garde
+     le haut de la cellule et lui laisse le bas. */
+  .play-head:not(:has(.selected-piece-preview)) .game-status { align-items: center; }
+  .play-head:not(:has(.selected-piece-preview)) .game-status p:not(.visually-hidden) { text-align: center; }
+  .play-head:not(:has(.selected-piece-preview)):not(:has(.control-button--hint)) .game-status { justify-content: center; }
   /* Le message est calé en haut de la cellule : il s'étend vers le bas sans
      jamais atteindre le bouton de conseil, qui garde sa place en bas quel que
      soit le texte affiché. Aucun des deux ne glisse sous le doigt. */
@@ -709,10 +723,16 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
   }
-  /* Le panneau remplit la hauteur réservée et peut la dépasser si son texte le
-     force, sur les écrans les plus étroits : la partie est finie, plus rien
-     n'est à cliquer dans les réserves. */
-  .game-over-panel { height: auto; min-height: 100%; }
+  /* Le panneau tient dans la hauteur réservée, sans jamais la dépasser : le
+     plateau est maintenant sous lui et le déborder l'abaisserait à la victoire.
+     D'où la même troncature que le message de jeu — sur les écrans les plus
+     étroits, la phrase d'explication passe de trois lignes à deux. */
+  .game-over-panel p {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
   /* La rangée de flèches ne réserve plus de hauteur : elle se pose sur le haut
      du plateau, alignée sur ses colonnes par `--board-inset`. Le vide qu'elle
      laissait hors sélection disparaît, et comme elle ne pousse plus rien, le
