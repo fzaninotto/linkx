@@ -620,22 +620,29 @@
 }
 
 /* Permutation des réserves : chacune part de la place de l'autre et rejoint la
-   sienne, l'une en montant, l'autre en descendant, pendant qu'elles échangent
-   leur opacité. Les deux boîtes ayant la même hauteur, `100%` de la hauteur
-   propre vaut le déplacement exact d'une place à l'autre — d'où le retrait bas
-   déporté sur `.game-layout`, qui les garde égales.
+   sienne, l'une en montant, l'autre en descendant. Les deux boîtes ayant la même
+   hauteur, `100%` de la hauteur propre vaut le déplacement exact d'une place à
+   l'autre — d'où le retrait bas déporté sur `.game-layout`, qui les garde
+   égales.
    Ces deux animations sont **le mécanisme même de la permutation** : le tour ne
    déplace qu'un seul des deux nœuds dans le DOM, donc seul un changement de nom
    d'animation garantit que les deux rejouent. Elles doivent rester deux noms
    distincts, portés par les deux sélecteurs de position — leur fusion en une
    seule laisserait la réserve non déplacée immobile un tour sur deux. Toutes
-   deux tombent d'elles-mêmes sous `prefers-reduced-motion`. */
+   deux tombent d'elles-mêmes sous `prefers-reduced-motion`.
+   Elles ne portent **que** le déplacement : l'écart d'opacité entre les deux
+   réserves change d'un coup, sans être fondu. Fondre les deux opacités les
+   rendrait toutes deux translucides au milieu du croisement — c'est justement
+   l'instant où elles sont exactement superposées, et les deux jeux de pièces
+   transparaîtraient l'un dans l'autre. Opaques, celle qui monte couvre
+   franchement celle qui descend, et la bascule d'opacité passe inaperçue
+   derrière elle. */
 @keyframes tray-takes-turn {
-  from { opacity: 0.6; transform: translateY(100%); }
+  from { transform: translateY(100%); }
 }
 
 @keyframes tray-yields-turn {
-  from { opacity: 1; transform: translateY(-100%); }
+  from { transform: translateY(-100%); }
 }
 
 /* L'aperçu s'ouvre au-dessus du plateau au premier appui sur une pièce. La place
