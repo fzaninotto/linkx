@@ -20,11 +20,33 @@ type BoardProps = {
   hintCells?: Point[]
   /** Pièce à faire briller, le temps que le joueur repère le coup de l'ordi. */
   glowPieceId?: string | null
+  /**
+   * Pièce qui vient d'être posée, et qui tombe donc depuis le haut du plateau.
+   * Une seule à la fois : les pièces déjà en place ne rejouent pas leur chute
+   * quand le plateau se rend à nouveau, ni au chargement d'une position.
+   */
+  fallingPieceId?: string | null
   /** Visée au pointeur : la colonne survolée porte la pièce, le clic la pose. */
   aiming?: boolean
   onPointColumn?: (column: number | null) => void
   onDropColumn?: (column: number) => void
 }
+
+/**
+ * Découpe du calque des pièces, en cases au-dessus de la première ligne. Le
+ * calque déborde par ailleurs librement — les ombres portées des pièces de bord
+ * ont besoin de ce dépassement — mais une pièce qui tombe doit disparaître au
+ * bord haut du plateau plutôt que par-dessus son cadre. La valeur vaut à peu
+ * près le retrait intérieur du plateau : le biseau des pièces de la première
+ * ligne y tient encore, et rien ne franchit la bordure sombre.
+ */
+const FALL_CLIP_TOP = -0.06
+
+/**
+ * Hauteur à ajouter à la chute pour que la pièce parte entièrement hors du
+ * calque découpé, ombre portée comprise.
+ */
+const FALL_CLEARANCE = 0.35
 
 type RenderedPiece = {
   id: string
@@ -32,7 +54,49 @@ type RenderedPiece = {
   cells: Point[]
 }
 
-function boardPieces(board: BoardType): (RenderedPiece & { outline: string })[] {
+/**
+ * Temps que met une pièce à tomber d'une case, en millisecondes. Fixe la
+ * gravité, donc la vivacité de toutes les chutes d'un seul réglage.
+ */
+const FALL_MS_PER_ROOT_CELL = 138
+
+/**
+ * Restitution de l'impact : le rebond s'élève à cette fraction de la hauteur
+ * tombée. Une pièce lâchée d'une case ne rebondit donc pratiquement pas, une
+ * pièce tombée de tout le plateau frappe et repart visiblement.
+ */
+const FALL_RESTITUTION = 0.012
+
+/**
+ * Départ, durée et rebond de la chute d'une pièce dont le bas repose sur
+ * `bottom`.
+ *
+ * Les longueurs sont en **cases** : `.board-piece` est un élément SVG, où une
+ * longueur de `transform` s'exprime dans l'espace utilisateur local, ici une
+ * case et non un pixel d'écran. La chute garde ainsi la même ampleur relative
+ * du plateau de bureau à celui du téléphone.
+ *
+ * La durée suit la **racine** de la hauteur et rien d'autre, parce que c'est ce
+ * que dit `h = ½gt²` : toutes les pièces tombent alors avec la même
+ * accélération, quelle que soit la ligne où elles s'arrêtent. Y ajouter une
+ * constante — un temps de départ, une durée plancher — reviendrait à donner une
+ * gravité plus faible aux pièces qui atterrissent haut, et c'est très visible :
+ * elles flottent au lieu de tomber. Le rebond garde une part fixe de la durée,
+ * ce qui est cohérent : il dure lui aussi la racine de sa propre hauteur, elle
+ * même proportionnelle à la hauteur tombée.
+ */
+function fallStyle(bottom: number): React.CSSProperties {
+  const height = bottom + FALL_CLEARANCE
+  return {
+    '--fall-from': `${-height}px`,
+    '--fall-duration': `${Math.round(FALL_MS_PER_ROOT_CELL * Math.sqrt(height))}ms`,
+    '--fall-bounce': `${(-FALL_RESTITUTION * height).toFixed(3)}px`,
+  } as React.CSSProperties
+}
+
+function boardPieces(
+  board: BoardType,
+): (RenderedPiece & { outline: string; bottom: number })[] {
   const pieces = new Map<string, RenderedPiece>()
   board.forEach((row, y) =>
     row.forEach((cell, x) => {
@@ -51,6 +115,7 @@ function boardPieces(board: BoardType): (RenderedPiece & { outline: string })[] 
   return [...pieces.values()].map((piece) => ({
     ...piece,
     outline: getCellsOutlinePath(piece.cells),
+    bottom: Math.max(...piece.cells.map(({ y }) => y)) + 1,
   }))
 }
 
@@ -62,6 +127,7 @@ export function Board({
   celebrate = false,
   hintCells = [],
   glowPieceId = null,
+  fallingPieceId = null,
   aiming = false,
   onPointColumn,
   onDropColumn,
@@ -94,23 +160,40 @@ export function Board({
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          {pieces.map((piece) => (
-            <path
-              className={`board-piece board-piece--${piece.player}${piece.id === glowPieceId ? ' board-piece--glowing' : ''}`}
-              d={piece.outline}
-              key={piece.id}
-            />
-          ))}
-          {/* Les reflets viennent après toutes les dalles, jamais entrelacés :
-              l'ombre portée d'une pièce doit tomber sur la matière de sa voisine,
-              pas sur la lumière qui la nappe. */}
-          {pieces.map((piece) => (
-            <path
-              className="board-piece-sheen"
-              d={piece.outline}
-              key={`sheen-${piece.id}`}
-            />
-          ))}
+          {/* La chute part au-dessus de la première ligne : sans découpe, la
+              pièce se peindrait par-dessus la bordure du plateau et le cadre,
+              que ce calque déborde volontiers pour laisser passer les ombres. */}
+          <defs>
+            <clipPath id="board-fall-clip" clipPathUnits="userSpaceOnUse">
+              <rect
+                x={-BOARD_SIZE}
+                y={FALL_CLIP_TOP}
+                width={BOARD_SIZE * 3}
+                height={BOARD_SIZE * 3}
+              />
+            </clipPath>
+          </defs>
+          <g clipPath="url(#board-fall-clip)">
+            {pieces.map((piece) => (
+              <path
+                className={`board-piece board-piece--${piece.player}${piece.id === glowPieceId ? ' board-piece--glowing' : ''}${piece.id === fallingPieceId ? ' board-piece--falling' : ''}`}
+                style={piece.id === fallingPieceId ? fallStyle(piece.bottom) : undefined}
+                d={piece.outline}
+                key={piece.id}
+              />
+            ))}
+            {/* Les reflets viennent après toutes les dalles, jamais entrelacés :
+                l'ombre portée d'une pièce doit tomber sur la matière de sa
+                voisine, pas sur la lumière qui la nappe. */}
+            {pieces.map((piece) => (
+              <path
+                className={`board-piece-sheen${piece.id === fallingPieceId ? ' board-piece-sheen--falling' : ''}`}
+                style={piece.id === fallingPieceId ? fallStyle(piece.bottom) : undefined}
+                d={piece.outline}
+                key={`sheen-${piece.id}`}
+              />
+            ))}
+          </g>
           {/* Le conseil désigne des cases encore vides : il se pose au-dessus des
               dalles, sans matière ni reflet, et disparaît dès que le joueur agit.
               Il ne peut pas coexister avec le ghost, qui suppose une sélection. */}

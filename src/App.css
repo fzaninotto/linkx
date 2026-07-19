@@ -217,14 +217,10 @@
 }
 
 .piece-button:not(:disabled):hover { background: rgb(255 255 255 / 52%); box-shadow: inset 0 0 0 2px rgb(22 103 217 / 35%); }
-.piece-button.is-selected { background: rgb(255 255 255 / 76%); box-shadow: inset 0 0 0 3px var(--blue); }
-.piece-tray--white .piece-button.is-selected { box-shadow: inset 0 0 0 3px #5c6575; }
 .piece-button:disabled { cursor: default; }
 .piece-button--unavailable { cursor: default; }
-/* Exemplaire conseillé. Le liseré violet se pose sur les deux réserves — fond
-   clair côté bleu, gris bleuté côté blanc — sans emprunter ni la teinte de la
-   sélection ni celle d'un camp. Comme la sélection efface le conseil, les deux
-   états ne peuvent pas se superposer ; la spécificité les départage malgré tout. */
+/* Le violet est la seule teinte qui tienne sur les deux fonds de réserve sans
+   emprunter la couleur d'un camp. */
 .piece-button.piece-button--hinted {
   background: rgb(124 58 237 / 12%);
   box-shadow: inset 0 0 0 3px var(--hint);
@@ -252,10 +248,14 @@
 /* La réserve dessine petit : même lumière, relief et ombre atténués pour que
    les silhouettes voisines ne se marchent pas dessus. */
 .piece-shape--compact .piece-shape__silhouette { filter: url(#plexi-relief-soft); }
-/* Un exemplaire joué n'est qu'un contour pointillé : le remplissage doit tomber
-   pour les deux joueurs, y compris derrière la règle plus spécifique du blanc.
-   Sans matière non plus : une empreinte vide ne réfléchit pas la lumière. */
-.piece-shape .piece-shape__silhouette--unavailable { fill: none; stroke-dasharray: 0.22 0.16; filter: none; }
+/* Le préfixe `.piece-shape` n'est là que pour passer devant la règle du blanc,
+   plus spécifique, qui repose le remplissage. */
+.piece-shape .piece-shape__silhouette--unavailable {
+  fill: none;
+  stroke-dasharray: 0.22 0.16;
+  stroke-opacity: 0.4;
+  filter: none;
+}
 
 /* Central play area */
 /* La bande de visée et le vide qui la remplace hors sélection dérivent d'une
@@ -357,7 +357,7 @@
 .board-piece-layer { position: absolute; z-index: 2; top: var(--board-padding); left: var(--board-padding); width: calc(100% - 2 * var(--board-padding)); height: calc(100% - 2 * var(--board-padding)); overflow: visible; pointer-events: none; }
 /* Dalles de plexiglas : teinte translucide, tranche biseautée et ombre portée
    viennent du filtre partagé, la géométrie reste celle de `getCellsOutlinePath`. */
-.board-piece { fill: var(--blue); fill-opacity: var(--blue-fill-opacity); stroke: var(--blue-outline); stroke-width: var(--piece-outline); stroke-linejoin: miter; filter: url(#plexi-relief); animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1); }
+.board-piece { fill: var(--blue); fill-opacity: var(--blue-fill-opacity); stroke: var(--blue-outline); stroke-width: var(--piece-outline); stroke-linejoin: miter; filter: url(#plexi-relief); }
 .board-piece--white { fill: var(--white-piece); fill-opacity: var(--white-fill-opacity); stroke: var(--white-outline); }
 /* Le ghost plane : plus transparent, sans tranche à l'ombre, et son ombre
    portée est lointaine et diffuse. Il se lit « pas encore posé ». */
@@ -367,9 +367,19 @@
 /* Reflet des dalles posées : la nappe de lumière de `plexi-sheen`, découpée par
    le contour de la pièce. Elle ne porte ni contour ni filtre — la géométrie et
    le relief sont déjà peints par la couche du dessous. */
-.board-piece-sheen { fill: url(#plexi-sheen); stroke: none; pointer-events: none; animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1); }
+.board-piece-sheen { fill: url(#plexi-sheen); stroke: none; pointer-events: none; }
 /* Le ghost plane hors de la matière : il n'en accroche qu'un reflet affaibli. */
-.board-piece-sheen--ghost { opacity: 0.5; animation: none; }
+.board-piece-sheen--ghost { opacity: 0.5; }
+
+/* Chute de la pièce qui vient d'être posée, dalle et reflet du même geste. Le
+   départ et la durée dépendent de la hauteur tombée et sont donc calculés par
+   `Board.tsx`, qui seul connaît la ligne d'arrivée ; ils arrivent ici en
+   variables. Le calque étant découpé au bord haut du plateau, la pièce sort du
+   cadre en début d'animation et entre par le haut, au lieu d'apparaître à sa
+   place. Le découpage du temps est porté par les images clés, d'où le `linear`
+   : accélération de chute libre, puis un rebond bref à l'impact. */
+.board-piece--falling,
+.board-piece-sheen--falling { animation: piece-falls var(--fall-duration) linear; }
 /* Chemin gagnant : un trait continu qui relie les deux bords en suivant la
    connexion, et non un pavage des cases qui empâtait la position finale. Il est
    doublé — un liseré sombre, puis un cœur doré — pour rester lisible sur les
@@ -397,17 +407,25 @@
 
 /* Le coup de l'ordinateur pulse quelques secondes pour être repérable. Le
    pulse porte sur le contour seul : une liste de filtres contenant un `url()`
-   s'anime par pas, la matière clignoterait au lieu de respirer. */
-.board-piece--glowing { animation: piece-arrive 240ms cubic-bezier(.2,.8,.2,1), piece-glow 900ms ease-in-out 240ms infinite alternate; }
+   s'anime par pas, la matière clignoterait au lieu de respirer.
+
+   Le coup de l'ordinateur tombe comme celui du joueur, puis pulse : la chute
+   dit *où*, le pulse laisse le temps de le voir. Le pulse attend donc la fin de
+   la chute, d'où le délai calé sur sa durée. */
+.board-piece--glowing { animation: piece-glow 900ms ease-in-out var(--fall-duration, 0ms) infinite alternate; }
+.board-piece--falling.board-piece--glowing { animation: piece-falls var(--fall-duration) linear, piece-glow 900ms ease-in-out var(--fall-duration) infinite alternate; }
 
 /* `.board-piece` est un élément SVG. Dans un `transform` CSS, une longueur s'y
    exprime en unités de l'espace utilisateur local — ici une case — et non en
-   pixels d'écran. `-3px` ne décalait donc pas la pièce de trois pixels mais de
-   trois cases, soit un tiers du plateau : les pièces débordaient largement
-   au-dessus du cadre pendant toute la descente. Le décalage est exprimé en
-   fraction de case, comme le reste des longueurs de la couche des pièces, pour
-   garder la même ampleur relative du plateau de bureau à celui du mobile. */
-@keyframes piece-arrive { from { opacity: 0; transform: translateY(-0.18px); } }
+   pixels d'écran. `-3px` ne décale donc pas la pièce de trois pixels mais de
+   trois cases, soit un tiers du plateau. `--fall-from` est posé en cases par
+   `Board.tsx` pour cette raison, et le rebond de l'impact aussi. */
+@keyframes piece-falls {
+  0% { transform: translateY(var(--fall-from)); animation-timing-function: cubic-bezier(.55,.09,.68,.53); }
+  78% { transform: translateY(0); animation-timing-function: cubic-bezier(.25,.1,.4,1); }
+  88% { transform: translateY(var(--fall-bounce)); animation-timing-function: cubic-bezier(.6,0,.7,.5); }
+  100% { transform: translateY(0); }
+}
 @keyframes piece-glow {
   from { stroke: #d59b00; stroke-width: var(--piece-outline); }
   to { stroke: #ffd54a; stroke-width: 0.13; }
@@ -507,19 +525,36 @@
   .play-area { padding-top: 1rem; }
 
   /* Le trait sépare la réserve de ce qui la précède : il reste juste quel que
-     soit celui des deux joueurs qui passe en premier. */
-  .piece-tray { min-width: 0; padding: 0.6rem 2px; border: 0; border-top: 1px solid #d2d5db; }
+     soit celui des deux joueurs qui passe en premier. `container-type` fait de
+     la réserve le conteneur dont dépend la taille de case, plus bas. */
+  .piece-tray {
+    min-width: 0;
+    padding: 0.6rem 5px;
+    border: 0;
+    border-top: 1px solid #d2d5db;
+    container-type: inline-size;
+  }
   .piece-tray:last-child { padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px)); }
 
   /* Sept groupes en colonnes, les deux exemplaires empilés : c'est la seule
      disposition qui tienne en deux rangées sans défilement dès 320px, et celle
-     qui laisse la plus large zone tactile à chaque silhouette. */
+     qui laisse la plus large zone tactile à chaque silhouette.
+
+     Les colonnes sont en `auto`, donc calées sur la largeur de leur forme — de
+     une à trois cases — et non toutes égales : sept colonnes égales se règlent
+     sur la plus large et noient le mono dans du vide pendant que les pièces de
+     trois cases touchent presque leurs voisines. `justify-content` vaut
+     `normal`, ce qui répartit **également** l'espace restant entre les colonnes
+     `auto` : chaque silhouette reçoit ainsi la même marge, quelle que soit sa
+     largeur. Ne pas fixer `justify-content` ici, cette répartition tomberait et
+     tout se tasserait à gauche. La gouttière de colonne est nulle pour la même
+     raison : c'est cette répartition qui écarte les pièces. */
   .piece-list {
     width: min(100%, 560px);
     min-width: 0;
     margin-inline: auto;
-    gap: 4px 1px;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 4px 0;
+    grid-template-columns: repeat(7, auto);
   }
 
   /* `stretch` est indispensable : c'est lui qui donne au bouton toute la cellule
@@ -534,14 +569,22 @@
     place-items: stretch;
   }
 
-  .piece-button { min-width: 0; padding: 2px; }
+  /* Aucun padding latéral : la largeur de colonne doit valoir exactement celle
+     de la silhouette, sinon elle s'ajouterait à la marge déjà répartie. Le
+     bouton, lui, occupe toute la colonne marge comprise — c'est la zone
+     tactile. */
+  .piece-button { min-width: 0; padding: 2px 0; }
 
-  /* La silhouette est dessinée plus petite que son bouton : la case se déduit de
-     la colonne disponible — sept colonnes, trois cases de large au maximum —
-     tandis que la zone tactile garde ses 44px. Le retrait de 26px couvre le
-     padding de la réserve, les gouttières et une barre de défilement de bureau,
-     pour qu'aucune largeur ne puisse déborder. */
-  .piece-shape--compact { --piece-cell: min(24px, (100vw - 26px) / 21 - 1.4px); }
+  /* La case se déduit de la largeur de la réserve, pas de celle du viewport :
+     les sept formes totalisent 17 cases de large, et il faut leur ajouter les
+     sept marges que la répartition de `.piece-list` prélèvera sur le reste.
+     `100cqw` étant la largeur de contenu de la réserve — d'où le
+     `container-type` posé plus haut — son padding est déjà déduit et aucune
+     constante de correction n'est à tenir à jour. */
+  .piece-shape--compact {
+    --piece-margin: 12px;
+    --piece-cell: min(24px, (100cqw - 7 * var(--piece-margin)) / 17);
+  }
 
   /* La réserve adverse reste lisible mais s'efface : sans cela deux réserves de
      même gabarit permutent sans qu'on sache laquelle vient de prendre la main.

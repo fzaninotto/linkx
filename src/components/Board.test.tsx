@@ -71,3 +71,101 @@ describe('tracé du chemin gagnant', () => {
     expect(festive).toMatch(/<div class="board-fireworks" aria-hidden="true">/)
   })
 })
+
+describe('chute de la pièce posée', () => {
+  /** Deux pièces d'une case, l'une au fond du plateau, l'autre tout en haut. */
+  const twoHeights = () => {
+    const board = createEmptyBoard()
+    board[8][0] = { player: 'blue', pieceId: 'blue-bas', shapeId: 'mono' }
+    board[0][3] = { player: 'white', pieceId: 'white-haut', shapeId: 'mono' }
+    return board
+  }
+
+  const fallOf = (markup: string, pieceClass: string) => {
+    const tag = markup.match(
+      new RegExp(`<path[^>]*${pieceClass}[^>]*board-piece--falling[^>]*>`),
+    )
+    if (!tag) return null
+    const read = (name: string) =>
+      Number(tag[0].match(new RegExp(`${name}:\\s*(-?[\\d.]+)`))![1])
+    return { from: read('--fall-from'), duration: read('--fall-duration') }
+  }
+
+  it('ne fait tomber que la pièce désignée', () => {
+    const board = twoHeights()
+
+    const markup = renderToStaticMarkup(
+      <Board
+        board={board}
+        ghost={null}
+        ghostPlayer="blue"
+        fallingPieceId="blue-bas"
+      />,
+    )
+
+    // Une seule dalle et son seul reflet : les pièces déjà en place ne
+    // retombent pas quand une nouvelle est jouée.
+    expect(markup.match(/board-piece--falling/g)).toHaveLength(1)
+    expect(markup.match(/board-piece-sheen--falling/g)).toHaveLength(1)
+  })
+
+  it('ne fait rien tomber sans pièce désignée', () => {
+    const markup = renderToStaticMarkup(
+      <Board board={twoHeights()} ghost={null} ghostPlayer="blue" />,
+    )
+
+    expect(markup).not.toContain('--falling')
+  })
+
+  it('part toujours d’au-dessus du plateau, quelle que soit la ligne d’arrivée', () => {
+    const board = twoHeights()
+
+    for (const [id, bottom] of [
+      ['blue-bas', 9],
+      ['white-haut', 1],
+    ] as const) {
+      const fall = fallOf(
+        renderToStaticMarkup(
+          <Board
+            board={board}
+            ghost={null}
+            ghostPlayer="blue"
+            fallingPieceId={id}
+          />,
+        ),
+        'board-piece--',
+      )!
+      // Le bas de la pièce démarre hors du plateau : sans cette marge elle
+      // apparaîtrait déjà entamée au bord haut du cadre.
+      expect(fall.from).toBeLessThan(-bottom)
+    }
+  })
+
+  it('donne la même accélération à toutes les pièces', () => {
+    const board = twoHeights()
+
+    const falls = (['blue-bas', 'white-haut'] as const).map(
+      (id) =>
+        fallOf(
+          renderToStaticMarkup(
+            <Board
+              board={board}
+              ghost={null}
+              ghostPlayer="blue"
+              fallingPieceId={id}
+            />,
+          ),
+          'board-piece--',
+        )!,
+    )
+
+    const [loin, court] = falls
+    expect(Math.abs(loin.from)).toBeGreaterThan(Math.abs(court.from))
+    // `h = ½gt²` : la durée suit la racine de la hauteur, et rien d'autre. Un
+    // terme constant — durée plancher, temps de départ — ferait flotter les
+    // pièces qui s'arrêtent haut, et c'est exactement ce que ce test interdit.
+    const g = (f: (typeof falls)[number]) =>
+      Math.abs(f.from) / f.duration ** 2
+    expect(g(loin)).toBeCloseTo(g(court), 5)
+  })
+})

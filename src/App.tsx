@@ -362,6 +362,7 @@ function App() {
             celebrate={state.phase === 'finished' && Boolean(state.result?.winner)}
             hintCells={hint?.cells ?? []}
             glowPieceId={glowPieceId}
+            fallingPieceId={state.lastPlacedPieceId}
             aiming={aiming && pointerHasHover}
             onPointColumn={setPointedColumn}
             onDropColumn={(column) => {

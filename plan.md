@@ -234,6 +234,8 @@ Le cas d'une position **déjà gagnante** relève de l'histoire 4 : tant que la 
 
 **Réserves.** Chaque joueur voit ses sept formes, chacune représentée par **deux silhouettes** côte à côte. Un exemplaire disponible est plein et sélectionnable ; un exemplaire joué reste visible en **contour pointillé** et n'est plus sélectionnable. La séquence d'une forme est donc : deux pleines, puis une pleine et une pointillée, puis deux pointillées. Aucun nom de forme ni compteur numérique n'est affiché ; ces informations restent disponibles pour qui n'a pas accès à l'image. La réserve adverse est visible mais inerte.
 
+**Exemplaire en main.** L'exemplaire sélectionné passe lui aussi en contour pointillé : il a quitté la réserve, et c'est l'aperçu central qui le montre en matière. Aucun cadre ni liseré de sélection ne s'y ajoute — l'empreinte vide dit déjà où la pièce a été prise, et un second marquage ferait doublon. Le pointillé reste assez clair pour ne pas peser plus lourd à l'œil que les silhouettes pleines qui l'entourent.
+
 **Orientation de présentation.** Les silhouettes de réserve gardent une orientation fixe : elles ne tournent ni ne se retournent jamais, quelle que soit la sélection en cours. Cette orientation compte, car sélectionner une pièce l'arme **exactement** dans la pose où sa silhouette est dessinée : c'est le point de départ des rotations, et donc la première chose que le joueur voit bouger.
 
 Les sept silhouettes de présentation, toutes non retournées, sont :
@@ -254,11 +256,21 @@ Le principe : chaque forme est présentée **couchée**, dans son orientation la
 
 La pièce sélectionnée est montrée en grand dans une zone dédiée, à l'échelle du plateau. Cette zone est elle-même une commande de proximité : y agir tourne la pièce, et l'action secondaire la retourne. Les commandes explicites de rotation et de retournement restent visibles — ce sont elles qui font découvrir la manipulation.
 
+**La pièce tourne, elle n'est pas remplacée.** Dans cette zone, un quart de tour et un retournement sont des **mouvements** : l'aperçu part de l'orientation qu'on quitte et va jusqu'à celle qu'on demande, en une animation brève. Le joueur voit ainsi laquelle des deux commandes il vient d'employer et dans quel sens elle agit, ce qu'une substitution d'une image à l'autre ne dit pas.
+
+Le mouvement est purement visuel : la pièce est armée dans sa nouvelle orientation dès la commande, si bien que viser, poser ou tourner encore pendant l'animation obéit déjà à celle-ci. Un mouvement interrompu par le suivant ne revient jamais en arrière — le nouveau part de l'orientation d'arrivée du précédent. Enchaîner les quarts de tour n'accumule donc aucun retard. Ni la réserve, ni l'aperçu de chute sur le plateau ne sont animés : la réserve ne tourne pas du tout, et l'aperçu de chute suit la visée, où un mouvement le ferait traîner derrière le pointeur.
+
 **Visée.** La colonne visée porte le **centre** de la pièce, jamais son bord gauche, et la pièce est retenue contre les bords du plateau au lieu de dépasser. Précisément : colonne d'ancrage = colonne visée − partie entière de `(largeur − 1) / 2`, ramenée dans l'intervalle `[0, 9 − largeur]`. Une largeur paire penche donc à gauche. Viser le bord droit avec une barre de trois la pose sur les trois dernières colonnes.
 
 Cette conversion est **unique** et partagée par tous les modes de visée. La pose, elle, ne transmet jamais que la colonne : la position d'arrivée est toujours recalculée par les règles, jamais fournie par l'affichage.
 
 **Aperçu.** Dès qu'une pièce est sélectionnée, un aperçu occupe exactement les cases où elle atterrirait, dans la couleur du joueur et en transparence. Il suit la visée et l'orientation.
+
+**La pièce tombe, elle n'apparaît pas.** Une pose n'ajoute pas une pièce à sa place : la pièce **entre par le bord haut du plateau** et descend jusqu'à sa case d'arrivée. C'est le geste que nomme le jeu — faire tomber une pièce — et c'est aussi ce qui montre *quelle* colonne vient d'être jouée, sans quoi le plateau change sans qu'on voie où. Elle est masquée tant qu'elle est au-dessus du plateau : la chute commence au bord haut du cadre, jamais par-dessus lui.
+
+La descente obéit à une **chute libre**, ce qui veut dire une seule chose mais une chose stricte : toutes les pièces tombent avec la **même accélération**, quelle que soit la ligne où elles s'arrêtent. La durée suit donc la racine carrée de la hauteur tombée, et rien d'autre. Le piège est d'y ajouter une durée plancher ou un temps de départ constants : les pièces qui s'arrêtent haut dans la grille reçoivent alors une gravité plus faible que les autres et se mettent à flotter, ce qui se voit immédiatement. Une pièce lâchée d'une case tombe lentement mais brièvement ; une pièce qui traverse tout le plateau arrive vite. Elle rebondit à l'impact, d'autant plus qu'elle est tombée de haut.
+
+**Choix de cette version.** La pièce de l'ordinateur (histoire 10) tombe **exactement comme celle du joueur**. Sa mise en évidence attend la fin de la chute au lieu de la recouvrir : la chute dit où le coup a été joué, le reste laisse le temps de le lire.
 
 **Trois façons de viser, selon le support.** Là où le pointeur sait survoler, le plateau entier **et la bande qui le surmonte** deviennent la surface de visée : la pièce suit la colonne survolée et l'action la pose ; aucune rangée de commandes n'est alors affichée. La bande supérieure est indispensable, un plateau presque plein n'offrant plus de case libre à survoler. Là où le pointeur ne survole pas, neuf zones d'entrée apparaissent au-dessus du plateau, uniquement quand une pièce est sélectionnée, chacune réduite à une flèche sans numéro visible.
 
@@ -286,11 +298,17 @@ L'attribution des touches relève de l'implémentation. À titre indicatif, cett
 - Un premier choix sélectionne l'exemplaire visé, dans l'orientation exacte de sa silhouette de réserve.
 - Choisir l'autre exemplaire de la même forme change la sélection sans modifier l'orientation.
 - Choisir à nouveau le même exemplaire tourne la pièce d'un quart de tour.
+- Tourner ou retourner fait passer l'aperçu de sélection d'une orientation à l'autre par un mouvement, non par une substitution ; changer d'exemplaire, lui, n'anime rien.
+- Enchaîner les quarts de tour plus vite que l'animation ne fait jamais reculer la pièce, et la pose obéit à l'orientation demandée, pas à celle qui est peinte.
 - La commande de retournement transforme le grand `L` en `J` et le `S` en `Z` ; elle est indisponible pour les cinq autres formes.
 - Les silhouettes de réserve ne tournent jamais, quelle que soit l'orientation de la sélection.
 - Une pose consomme **exactement** l'exemplaire choisi : c'est cette silhouette-là qui devient pointillée, pas l'autre.
 - Après une pose, le tour passe à l'adversaire et la sélection est vidée.
 - La pièce s'arrête sur la première case qu'elle rencontre en descendant et ne traverse jamais une case occupée.
+- Une pièce posée descend depuis le bord haut du plateau jusqu'à sa case d'arrivée ; elle n'apparaît jamais directement à sa place.
+- Une pièce en cours de chute n'est visible nulle part au-dessus du plateau : ni sur sa bordure, ni sur son cadre.
+- Deux pièces qui s'arrêtent à des hauteurs différentes tombent avec la même accélération : celle qui vient de loin arrive plus vite, et aucune ne flotte.
+- Les pièces déjà posées ne retombent pas quand une nouvelle pièce est jouée, ni au chargement d'une position depuis un lien.
 - L'aperçu et la pose définitive désignent toujours les mêmes cases.
 - Viser une colonne avec une barre de trois couvre cette colonne et ses deux voisines ; viser un bord retient la pièce contre ce bord au lieu de la faire dépasser.
 - Sélectionner, tourner ou retourner ne déplace aucun autre élément à l'écran : le bord supérieur du plateau ne bouge pas.
@@ -406,7 +424,7 @@ Quand les deux entrées sont fournies, la notation l'emporte sur la grille : ell
 
 **Disposition.** Le plateau occupe le haut de l'écran et reste l'élément le plus grand. Juste en dessous vient la réserve de celui qui joue ; en dessous encore, celle de l'adversaire, atténuée. À chaque tour les deux réserves **échangent leur place**, si bien que ses propres pièces sont toujours les plus proches du plateau. Cette permutation est en elle-même l'annonce du changement de tour ; elle est **aussi annoncée à voix haute**, en nommant le joueur et en disant quelle réserve devient jouable — un déplacement purement visuel n'existe pas pour qui ne voit pas l'écran.
 
-Chaque réserve montre ses sept formes sur **deux rangées**, sans rien à faire défiler latéralement. Les silhouettes sont petites, mais chaque exemplaire disponible occupe une zone tactile à la taille d'un doigt, nettement plus grande que le dessin qu'elle contient. Les exemplaires joués restent visibles en pointillé.
+Chaque réserve montre ses sept formes sur **deux rangées**, sans rien à faire défiler latéralement. Chaque forme y occupe la largeur de sa silhouette, plus la **même marge** que ses voisines : sept colonnes de largeur égale se régleraient sur la forme la plus large, ce qui noierait le mono dans du vide pendant que les pièces de trois cases toucheraient presque leurs voisines. La largeur ainsi rendue profite à toutes les silhouettes, qui se dessinent d'autant plus grandes. La zone tactile d'un exemplaire couvre toute sa colonne, marge comprise, et garde en hauteur la taille d'un doigt. Les exemplaires joués restent visibles en pointillé.
 
 **Bande réservée.** Une bande sous le plateau est réservée en permanence à la pièce sélectionnée, à ses commandes de rotation et de retournement, aux messages de refus et, en fin de partie, à l'annonce du vainqueur. Sa hauteur ne dépend pas de son contenu : **rien ne bouge quand on choisit une pièce, quand un refus s'affiche, ni quand la partie se termine**.
 
@@ -419,7 +437,8 @@ Sur un grand écran, la même matière se répartit en trois colonnes — une r�
 - La réserve du joueur au trait est celle qui touche le plateau ; celle de l'adversaire est en dessous et visiblement atténuée.
 - Un changement de tour permute les deux réserves et est annoncé, en nommant le joueur et sa réserve.
 - Les sept formes d'une réserve tiennent sur deux rangées, sans défilement latéral.
-- Chaque exemplaire disponible offre une cible tactile confortable au doigt, indépendamment de la taille de sa silhouette.
+- Chaque exemplaire disponible offre une cible tactile confortable au doigt en hauteur, et déborde sa silhouette de la marge qui l'écarte de ses voisines.
+- Deux silhouettes voisines d'une même réserve sont séparées du même écart, quelles que soient leurs largeurs.
 - Sélectionner une pièce, tourner, essuyer un refus ou terminer la partie ne déplace jamais le plateau ni les réserves.
 - En plein écran installé, aucun contenu ne passe sous l'encoche ni sous la barre de gestes.
 
@@ -435,11 +454,13 @@ Sur un grand écran, la même matière se répartit en trois colonnes — une r�
 
 **La lumière appartient à l'écran, jamais à la pièce.** Une lumière unique éclaire toute la scène depuis le haut à gauche, avec une ombre courte, si bien que la pièce a l'air de reposer dans le plateau. Tourner ou retourner une pièce fait pivoter **sa forme, pas son reflet** : l'éclairage est ancré sur le plateau, pas sur la pièce. Corollaire : une orientation doit être décrite par les cases qu'elle occupe, jamais obtenue en faisant tourner un dessin déjà éclairé.
 
+La règle porte sur les états **stables**, les seuls où l'on puisse comparer un reflet à son voisin. Elle admet une exception, et une seule : le temps du mouvement de rotation ou de retournement de l'aperçu de sélection (histoire 7), le dessin éclairé tourne avec la pièce. C'est le prix du mouvement, et il est borné — l'image d'arrivée retrouve la lumière de l'écran, et aucun état au repos, nulle part, ne montre un reflet de travers.
+
 **Une pièce est une dalle, pas un assemblage de carrés.** Aucune case d'une même pièce ne doit se distinguer de ses voisines. La silhouette est le contour de l'**union** de ses cases, sans aucune arête interne : dans le creux d'un `L`, d'un `T` ou d'un `S`, aucune encoche ni artefact de jonction ne doit apparaître. Empiler un dessin par case produit exactement ce défaut et doit être évité.
 
 C'est aussi une contrainte d'échelle, et c'est le piège principal : une pièce est un polyomino, ses divisions internes tombent donc exactement sur la grille. **Tout effet de matière dont la portée avoisine la taille d'une case s'aligne sur ces divisions et fait lire la pièce comme un patchwork de carrés.** Les seules échelles sûres sont très en dessous de la case — les liserés de tranche — ou très au-dessus — le reflet, étalé sur tout le plateau.
 
-Une même forme présente exactement le même contour, le même retrait et la même épaisseur de trait dans la réserve, dans l'aperçu de sélection, dans l'aperçu de chute et sur le plateau ; seule la teinte distingue les deux joueurs. Une pièce en attente de pose est plus transparente et plane au-dessus du plateau. Un exemplaire déjà joué reprend le même contour, en pointillé et sans remplissage.
+Une même forme présente exactement le même contour, le même retrait et la même épaisseur de trait dans la réserve, dans l'aperçu de sélection, dans l'aperçu de chute et sur le plateau ; seule la teinte distingue les deux joueurs. Une pièce en attente de pose est plus transparente et plane au-dessus du plateau. Un exemplaire absent de la réserve — déjà joué, ou en main — reprend le même contour, en pointillé clair et sans remplissage.
 
 **Critères d'acceptation**
 
@@ -448,7 +469,7 @@ Une même forme présente exactement le même contour, le même retrait et la m�
 - Aucune case d'une pièce ne se distingue de ses voisines par sa teinte ou sa luminosité, y compris sur une barre de trois.
 - Le quadrillage du plateau reste visible à travers les pièces.
 - Deux pièces distinctes de même couleur, adjacentes, restent visuellement séparables par leur tranche.
-- Tourner ou retourner une pièce ne déplace pas son reflet ni son ombre : la lumière vient toujours du haut à gauche.
+- Tourner ou retourner une pièce ne déplace pas son reflet ni son ombre : la lumière vient toujours du haut à gauche. Seul le mouvement de l'aperçu de sélection y déroge, et il rend cette lumière dès son image d'arrivée.
 - Une même forme a le même contour et la même épaisseur de trait dans les quatre contextes d'affichage.
 - Les pièces blanches restent nettement lisibles sur le fond du plateau et sur celui de leur réserve.
 - Une pièce en attente de pose se distingue d'une pièce posée par sa transparence.
@@ -500,7 +521,7 @@ Le chemin est un vrai chemin dans la zone gagnante, reconstruit avec la **même*
 
 Cette évaluation est **indicative** : c'est une heuristique qui fonctionne, pas une obligation. Ce qui est exigé, ce sont les niveaux perçus et le temps de réponse.
 
-**Retour au joueur.** L'ordinateur annonce qu'il réfléchit avant de chercher, pas après. La pièce qu'il vient de poser est mise en évidence quelques secondes : sans cela le plateau change tout seul et le joueur ne voit pas ce qui s'est passé.
+**Retour au joueur.** L'ordinateur annonce qu'il réfléchit avant de chercher, pas après. Sa pièce **tombe comme celle du joueur** (histoire 2) : c'est cette descente qui dit dans quelle colonne le coup est parti. Elle est ensuite mise en évidence quelques secondes, une fois posée : sans ces deux signaux le plateau change tout seul et le joueur ne voit pas ce qui s'est passé. La mise en évidence attend la fin de la chute plutôt que de la recouvrir, sinon les deux signaux se disputent le même instant.
 
 **Critères d'acceptation**
 
@@ -511,7 +532,8 @@ Cette évaluation est **indicative** : c'est une heuristique qui fonctionne, pas
 - L'ordinateur reconnaît un coup qui gagne immédiatement et le joue.
 - Le message d'attente est visible **avant** que la recherche commence, pas après.
 - Aucune position ne fait attendre plus de deux secondes, ouverture comprise, sur un appareil modeste.
-- La pièce que vient de poser l'ordinateur est mise en évidence assez longtemps pour être repérée.
+- La pièce de l'ordinateur descend depuis le bord haut du plateau, comme celle du joueur.
+- La pièce que vient de poser l'ordinateur est mise en évidence assez longtemps pour être repérée, une fois sa chute terminée.
 - Un coup de l'ordinateur hors de son tour est ignoré ; une pose manuelle pendant son tour est ignorée.
 - L'ordinateur ne passe jamais par le circuit de sélection du joueur humain : la réserve blanche n'est jamais interactive.
 - Tout se calcule sur l'appareil : aucun appel réseau n'est nécessaire pour jouer un coup.
