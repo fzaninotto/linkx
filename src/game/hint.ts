@@ -36,11 +36,13 @@ export type Hint = {
  * travaillant sur des copies. Deux appels sur une même position rendent donc le
  * même conseil.
  *
- * Départage : à score égal, le premier coup rencontré l'emporte. La recherche
- * ordonne les coups par l'heuristique avec un tri stable, et repart de
- * l'énumération de `legalMoves.ts` — formes dans l'ordre de `SHAPE_IDS`, puis
- * orientations uniques, puis colonnes de gauche à droite. Le conseil est donc
- * déterministe sans qu'aucun hasard ni aucune date n'entre dans le calcul.
+ * Départage : à score égal, le premier coup rencontré l'emporte, parce que le
+ * conseil **ne fournit pas** de tirage à la recherche — contrairement au tour de
+ * l'ordinateur, qui s'en sert pour varier ses parties. On attend d'un conseil
+ * qu'il soit stable : le redemander sur une même position ne doit pas changer la
+ * recommandation. L'ordre est celui de l'énumération de `legalMoves.ts` — formes
+ * dans l'ordre de `SHAPE_IDS`, puis orientations uniques, puis colonnes de gauche
+ * à droite —, que la recherche réordonne par l'heuristique avec un tri stable.
  *
  * L'inventaire est respecté par construction : `enumerateLegalMoves` ignore
  * toute forme dont il ne reste aucun exemplaire.

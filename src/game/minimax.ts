@@ -40,6 +40,14 @@ const UNREACHABLE_SCORE = BOARD_SIZE * BOARD_SIZE + 1
 
 export type MinimaxOptions = {
   depth?: number
+  /**
+   * Départage des coups de valeur strictement égale. Absent, le premier coup
+   * rencontré l'emporte et la recherche reste déterministe ; fourni, il tire au
+   * sort parmi les ex æquo, ce qui varie les parties sans jamais coûter un
+   * point d'évaluation. Le hasard est **injecté** pour que le domaine reste
+   * pur : `minimax.ts` n'appelle jamais `Math.random` lui-même.
+   */
+  random?: () => number
 }
 
 export type MinimaxDecision = {
@@ -193,6 +201,16 @@ function minimax(
   return bestScore
 }
 
+/**
+ * Un coup parmi des ex æquo. Sans tirage fourni, le premier l'emporte, ce qui
+ * garde la recherche déterministe. Le `Math.min` protège du tirage qui rendrait
+ * exactement 1.
+ */
+function pickAmongEquals(moves: LegalMove[], random?: () => number): LegalMove {
+  if (!random || moves.length === 1) return moves[0]
+  return moves[Math.min(Math.floor(random() * moves.length), moves.length - 1)]
+}
+
 export function chooseMinimaxMove(
   position: GamePosition,
   options: MinimaxOptions = {},
@@ -215,7 +233,7 @@ export function chooseMinimaxMove(
   }
   let alpha = Number.NEGATIVE_INFINITY
   const beta = Number.POSITIVE_INFINITY
-  let bestMove = moves[0]
+  let bestMoves: LegalMove[] = [moves[0]]
   let bestScore = Number.NEGATIVE_INFINITY
   const candidates = moves
     .map((move) => {
@@ -233,14 +251,26 @@ export function chooseMinimaxMove(
       ? orderingScore
       : scoreTransition(transition, depth - 1, alpha, beta, context)
     if (score > bestScore) {
-      bestMove = move
+      bestMoves = [move]
       bestScore = score
+    } else if (score === bestScore) {
+      bestMoves.push(move)
     }
-    alpha = Math.max(alpha, bestScore)
+    // Fenêtre ouverte d'un point sous le meilleur score, là où la recherche
+    // coupait à ce score exactement. Les scores sont entiers, donc la coupure
+    // reste la même pour tout coup strictement moins bon, mais un coup ex æquo
+    // tombe désormais **dans** la fenêtre : son score revient exact au lieu
+    // d'être une borne supérieure tronquée, seule façon de reconnaître une
+    // égalité sans se laisser abuser par un élagage.
+    alpha = Math.max(alpha, bestScore - 1)
     if (bestScore >= TERMINAL_SCORE) break
   }
 
-  return { move: bestMove, score: bestScore, exploredNodes: context.exploredNodes }
+  return {
+    move: pickAmongEquals(bestMoves, options.random),
+    score: bestScore,
+    exploredNodes: context.exploredNodes,
+  }
 }
 
 /**
@@ -261,10 +291,17 @@ export function getAffordableDepth(
   return Math.min(depth, WIDE_POSITION_DEPTH)
 }
 
-/** Coup choisi pour le joueur au trait, à la force demandée. */
+/**
+ * Coup choisi pour le joueur au trait, à la force demandée.
+ *
+ * `random` départage les ex æquo, comme dans `chooseMinimaxMove` : l'adversaire
+ * ordinateur le fournit pour varier ses parties, le conseil l'omet pour rendre
+ * deux fois la même recommandation sur une même position.
+ */
 export function chooseMoveForDifficulty(
   position: GamePosition,
   difficulty: Difficulty,
+  random?: () => number,
 ): MinimaxDecision | null {
   const legalMoveCount = enumerateLegalMoves(
     position.board,
@@ -273,5 +310,6 @@ export function chooseMoveForDifficulty(
   if (legalMoveCount === 0) return null
   return chooseMinimaxMove(position, {
     depth: getAffordableDepth(difficulty, legalMoveCount),
+    random,
   })
 }

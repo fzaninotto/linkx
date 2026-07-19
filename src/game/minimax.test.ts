@@ -25,6 +25,14 @@ import type {
 
 const STATISTICAL_GAME_COUNT = 20
 const MINIMUM_WIN_RATE = 0.8
+/** Tirages successifs suffisant à faire ressortir plusieurs ex æquo. */
+const TIE_BREAK_DRAWS = 12
+/**
+ * Idem sur la grille vide, qui est le pire cas de la recherche : ses 95 coups
+ * légaux rendent chaque appel assez coûteux pour qu'une douzaine dépasse le
+ * délai des tests.
+ */
+const OPENING_TIE_BREAK_DRAWS = 4
 
 /**
  * Bleu tient les colonnes 0 à 6 de la ligne du bas : deux monos supplémentaires
@@ -70,6 +78,12 @@ function positionWithBlueMonos(count: 1 | 2): GamePosition {
   }
 }
 
+/**
+ * Générateur reproductible. Consommer plusieurs tirages d'une même suite plutôt
+ * que le premier tirage de plusieurs graines : les graines voisines ne pèsent
+ * qu'une fraction du modulo, donc leurs premières valeurs sont presque
+ * identiques et retomberaient toutes sur le même ex æquo.
+ */
 function randomForSeed(seed: number): () => number {
   let state = seed >>> 0
   return () => {
@@ -189,6 +203,75 @@ describe('Minimax', () => {
     const first = chooseMinimaxMove(position, { depth: 2 })
     const second = chooseMinimaxMove(position, { depth: 2 })
     expect(second?.move).toEqual(first?.move)
+  })
+
+  it('varie l’ouverture quand un tirage départage les ex æquo', () => {
+    const position = createGamePosition('blue')
+    const random = randomForSeed(7)
+    const openings = new Set<string>()
+    for (let draw = 0; draw < OPENING_TIE_BREAK_DRAWS; draw += 1) {
+      const decision = chooseMinimaxMove(position, { depth: 2, random })
+      if (!decision) throw new Error('L’ouverture devrait offrir un coup légal.')
+      const { shapeId, orientation, column } = decision.move
+      openings.add(
+        `${shapeId}:${orientation.rotation}:${orientation.flipped}:${column}`,
+      )
+    }
+    expect(openings.size).toBeGreaterThan(1)
+  })
+
+  it('rend le même score quel que soit le tirage', () => {
+    let position = createGamePosition('blue')
+    position = playMove(position, 'bar3', 0, 0)
+    position = playMove(position, 'domino', 1, 0)
+    const reference = chooseMinimaxMove(position, { depth: 2 })
+    const random = randomForSeed(7)
+
+    for (let draw = 0; draw < TIE_BREAK_DRAWS; draw += 1) {
+      const decision = chooseMinimaxMove(position, { depth: 2, random })
+      expect(decision?.score).toBe(reference?.score)
+    }
+  })
+
+  it('joue le coup gagnant quel que soit le tirage', () => {
+    let position = createGamePosition('blue')
+    position = playMove(position, 'bar3', 0, 0)
+    position = playMove(position, 'domino', 1, 0)
+    position = playMove(position, 'bar3', 0, 3)
+    position = playMove(position, 'domino', 1, 1)
+    position = playMove(position, 'domino', 0, 6)
+    position = playMove(position, 'mono', 0, 2)
+    const random = randomForSeed(7)
+
+    for (let draw = 0; draw < TIE_BREAK_DRAWS; draw += 1) {
+      const decision = chooseMinimaxMove(position, { depth: 2, random })
+      if (!decision) throw new Error('La position gagnante devrait offrir un coup.')
+      expect(simulateLegalMove(position, decision.move).result).toEqual({
+        winner: 'blue',
+        reason: 'connection',
+      })
+    }
+  })
+
+  it('bloque l’adversaire quel que soit le tirage', () => {
+    const position = createGamePosition('white')
+    for (let x = 0; x < 8; x += 1) {
+      position.board[8][x] = { player: 'blue', shapeId: 'mono', pieceId: `blue-${x}` }
+    }
+    const random = randomForSeed(7)
+
+    for (let draw = 0; draw < TIE_BREAK_DRAWS; draw += 1) {
+      const decision = chooseMinimaxMove(position, { depth: 2, random })
+      if (!decision) throw new Error('La position devrait offrir un coup légal.')
+      const afterAi = simulateLegalMove(position, decision.move)
+      const blueStillWins = enumerateLegalMoves(
+        afterAi.position.board,
+        afterAi.position.inventories.blue,
+      ).some(
+        (move) => simulateLegalMove(afterAi.position, move).result?.winner === 'blue',
+      )
+      expect(blueStillWins).toBe(false)
+    }
   })
 
   it('conclut une simulation par un match nul à zones égales', () => {
