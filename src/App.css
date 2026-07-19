@@ -506,10 +506,20 @@
   /* Une seule colonne : le plateau d'abord, puis les deux réserves dans l'ordre
      où React les rend, la réserve active en tête. L'ordre visuel est donc
      exactement l'ordre du DOM, et la permutation se lit aussi à la tabulation. */
+  /* Le fond de réserve est porté par la grille elle-même, et non plus seulement
+     par les deux réserves : le temps de leur permutation elles se croisent, donc
+     chacune découvre un quart de bande à l'endroit qu'elle quitte. Sous elles la
+     même teinte, ce vide ne se voit pas.
+     Le retrait bas se prend ici pour la même raison. Posé sur la dernière
+     réserve, il rendait les deux boîtes inégales de la hauteur de la zone sûre,
+     et le `translateY(-100%)` de la descente — un pourcentage de la hauteur de
+     l'élément — partait d'autant trop haut. */
   .game-layout {
     grid-template-columns: minmax(0, 1fr);
     padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     padding-left: env(safe-area-inset-left, 0px);
+    background: #efefec;
   }
 
   .game-layout > .piece-tray--blue,
@@ -540,7 +550,6 @@
      déjà. `.piece-tray + .piece-tray` désigne la réserve adverse quel que soit
      celui des deux joueurs qui passe en premier. */
   .piece-tray + .piece-tray { border-top: 1px solid #d2d5db; }
-  .piece-tray:last-child { padding-bottom: calc(0.6rem + env(safe-area-inset-bottom, 0px)); }
 
   /* Sept groupes en colonnes, les deux exemplaires empilés : c'est la seule
      disposition qui tienne en deux rangées sans défilement dès 320px, et celle
@@ -595,16 +604,38 @@
   /* La réserve adverse reste lisible mais s'efface : sans cela deux réserves de
      même gabarit permutent sans qu'on sache laquelle vient de prendre la main.
      Le premier enfant après le plateau est, par construction, la réserve
-     active. */
-  .game-layout > .piece-tray + .piece-tray { opacity: 0.6; }
-  .game-layout > .play-area + .piece-tray { animation: tray-takes-turn 200ms ease-out; }
+     active.
+     La réserve qui prend la main passe devant : les deux se croisant, celle qui
+     monte vers le plateau doit couvrir celle qui descend, sinon la permutation
+     se lit à l'envers. */
+  .game-layout > .play-area + .piece-tray {
+    position: relative;
+    z-index: 1;
+    animation: tray-takes-turn 280ms cubic-bezier(.2,.75,.25,1);
+  }
+  .game-layout > .piece-tray + .piece-tray {
+    opacity: 0.6;
+    animation: tray-yields-turn 280ms cubic-bezier(.2,.75,.25,1);
+  }
 }
 
-/* Prise de tour : la réserve qui vient de passer sous le plateau se pose au lieu
-   d'apparaître d'un coup. Le mouvement est court et sans rebond ; il tombe de
-   lui-même sous `prefers-reduced-motion`. */
+/* Permutation des réserves : chacune part de la place de l'autre et rejoint la
+   sienne, l'une en montant, l'autre en descendant, pendant qu'elles échangent
+   leur opacité. Les deux boîtes ayant la même hauteur, `100%` de la hauteur
+   propre vaut le déplacement exact d'une place à l'autre — d'où le retrait bas
+   déporté sur `.game-layout`, qui les garde égales.
+   Ces deux animations sont **le mécanisme même de la permutation** : le tour ne
+   déplace qu'un seul des deux nœuds dans le DOM, donc seul un changement de nom
+   d'animation garantit que les deux rejouent. Elles doivent rester deux noms
+   distincts, portés par les deux sélecteurs de position — leur fusion en une
+   seule laisserait la réserve non déplacée immobile un tour sur deux. Toutes
+   deux tombent d'elles-mêmes sous `prefers-reduced-motion`. */
 @keyframes tray-takes-turn {
-  from { opacity: 0.2; transform: translateY(-8px); }
+  from { opacity: 0.6; transform: translateY(100%); }
+}
+
+@keyframes tray-yields-turn {
+  from { opacity: 1; transform: translateY(-100%); }
 }
 
 /* L'aperçu s'ouvre au-dessus du plateau au premier appui sur une pièce. La place
